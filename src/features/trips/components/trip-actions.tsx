@@ -26,7 +26,7 @@ export function TripActions({ tripId, shareToken }: { tripId: string; shareToken
   const shareUrl = token ? `${window.location.origin}/share/${token}` : "";
 
   return (
-    <div className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4">
+    <div className="space-y-3">
       <Button type="button" variant="secondary" onClick={createShareLink}>
         공유 링크 생성
       </Button>

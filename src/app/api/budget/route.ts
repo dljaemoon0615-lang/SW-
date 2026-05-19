@@ -2,23 +2,42 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/server/db/prisma";
 
-export async function GET() {
+function tripBudgetWhere(userId: string, tripId: string | null | undefined) {
+  return tripId
+    ? { userId, tripId }
+    : { userId, tripId: null };
+}
+
+export async function GET(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const budget = await prisma.budget.findFirst({
-    where: { userId: session.user.id },
-    include: { allocations: true },
-    orderBy: { updatedAt: "desc" },
-  });
+  const tripId = new URL(req.url).searchParams.get("tripId");
+
+  const budget = tripId
+    ? await prisma.budget.findFirst({
+        where: tripBudgetWhere(session.user.id, tripId),
+        include: { allocations: true },
+        orderBy: { updatedAt: "desc" },
+      })
+    : await prisma.budget.findFirst({
+        where: { userId: session.user.id },
+        include: { allocations: true },
+        orderBy: { updatedAt: "desc" },
+      });
+
+  const expenseWhere = tripId
+    ? { userId: session.user.id, tripId }
+    : { userId: session.user.id };
 
   const expenses = await prisma.expenseEntry.findMany({
-    where: { userId: session.user.id },
+    where: expenseWhere,
     orderBy: { spentAt: "desc" },
     take: 50,
   });
 
   return NextResponse.json({
+    tripId: budget?.tripId ?? tripId ?? null,
     totalKrw: budget?.totalKrw ?? 0,
     allocations: budget?.allocations.map((a) => ({
       category: a.category,
@@ -36,14 +55,38 @@ export async function PUT(req: Request) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-  const { totalKrw, allocations, expenses } = await req.json();
+  const { totalKrw, allocations, expenses, tripId } = await req.json();
 
-  let budget = await prisma.budget.findFirst({ where: { userId: session.user.id } });
-  if (!budget) {
-    budget = await prisma.budget.create({ data: { userId: session.user.id, totalKrw } });
-  } else {
-    budget = await prisma.budget.update({ where: { id: budget.id }, data: { totalKrw } });
+  if (!tripId) {
+    return NextResponse.json({ error: "tripId가 필요합니다." }, { status: 400 });
   }
+
+  const trip = await prisma.trip.findFirst({
+    where: { id: tripId, userId: session.user.id },
+  });
+  if (!trip) {
+    return NextResponse.json({ error: "여행을 찾을 수 없습니다." }, { status: 404 });
+  }
+
+  let budget = await prisma.budget.findFirst({
+    where: tripBudgetWhere(session.user.id, tripId),
+  });
+
+  if (!budget) {
+    budget = await prisma.budget.create({
+      data: { userId: session.user.id, tripId, totalKrw },
+    });
+  } else {
+    budget = await prisma.budget.update({
+      where: { id: budget.id },
+      data: { totalKrw, tripId },
+    });
+  }
+
+  await prisma.trip.update({
+    where: { id: tripId },
+    data: { totalBudget: totalKrw },
+  });
 
   await prisma.budgetAllocation.deleteMany({ where: { budgetId: budget.id } });
   if (allocations?.length) {
@@ -56,11 +99,15 @@ export async function PUT(req: Request) {
     });
   }
 
+  await prisma.expenseEntry.deleteMany({
+    where: { userId: session.user.id, tripId },
+  });
+
   if (expenses?.length) {
-    await prisma.expenseEntry.deleteMany({ where: { userId: session.user.id } });
     await prisma.expenseEntry.createMany({
       data: expenses.map((e: { category: string; amountKrw: number; description?: string }) => ({
         userId: session.user!.id,
+        tripId,
         category: e.category,
         amountKrw: e.amountKrw,
         description: e.description,
@@ -68,5 +115,5 @@ export async function PUT(req: Request) {
     });
   }
 
-  return NextResponse.json({ ok: true });
+  return NextResponse.json({ ok: true, tripId });
 }

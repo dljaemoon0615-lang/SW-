@@ -1,9 +1,10 @@
 import { notFound } from "next/navigation";
 import { AppShell } from "@/shared/layout/app-shell";
-import { Card } from "@/shared/ui/card";
 import { auth } from "@/auth";
 import { prisma } from "@/server/db/prisma";
+import { JAPAN_REGIONS } from "@/shared/lib/constants";
 import { TripActions } from "@/features/trips/components/trip-actions";
+import { TripItineraryGallery } from "@/features/trips/components/trip-itinerary-gallery";
 
 export const dynamic = "force-dynamic";
 
@@ -24,27 +25,19 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
 
   if (!trip) notFound();
 
+  const region = JAPAN_REGIONS.find((r) => r.id === trip.region);
+
   return (
-    <AppShell title={trip.title}>
-      <TripActions tripId={trip.id} shareToken={trip.shareToken} />
-      <ul className="mt-4 space-y-3">
-        {trip.days.map((day) => (
-          <li key={day.id}>
-            <Card>
-              <h3 className="font-semibold">{day.dayIndex + 1}일차</h3>
-              <ul className="mt-2 space-y-1 text-sm">
-                {day.items.map((item) => (
-                  <li key={item.id}>
-                    {item.startTime ? `${item.startTime} · ` : ""}
-                    {item.placeName}
-                    {item.transport ? ` (${item.transport})` : ""}
-                  </li>
-                ))}
-              </ul>
-            </Card>
-          </li>
-        ))}
-      </ul>
+    <AppShell>
+      <TripItineraryGallery
+        title={trip.title}
+        region={trip.region}
+        regionLabel={region?.label}
+        startDate={trip.startDate}
+        endDate={trip.endDate}
+        days={trip.days}
+        headerExtra={<TripActions tripId={trip.id} shareToken={trip.shareToken} />}
+      />
     </AppShell>
   );
 }

@@ -4,7 +4,7 @@ import { Card } from "@/shared/ui/card";
 import { auth } from "@/auth";
 import { prisma } from "@/server/db/prisma";
 import { JAPAN_REGIONS } from "@/shared/lib/constants";
-import { format } from "date-fns";
+import { TripCard } from "@/features/trips/components/trip-card";
 
 export const dynamic = "force-dynamic";
 
@@ -14,38 +14,48 @@ export default async function TripsPage() {
     ? await prisma.trip.findMany({
         where: { userId: session.user.id },
         orderBy: { updatedAt: "desc" },
+        include: {
+          days: {
+            include: { items: { select: { placeName: true } } },
+            orderBy: { dayIndex: "asc" },
+          },
+        },
       })
     : [];
 
   return (
     <AppShell title="내 일정">
-      <Link href="/planner" className="mb-4 block text-center text-sm text-rose-600">
+      <p className="mb-4 text-center text-sm text-slate-500">저장된 여행을 사진으로 한눈에 확인하세요</p>
+      <Link
+        href="/planner"
+        className="mb-6 block rounded-xl border border-dashed border-rose-200 bg-rose-50/50 py-3 text-center text-sm font-medium text-rose-600 transition hover:bg-rose-50"
+      >
         + 새 일정 만들기
       </Link>
-      <ul className="space-y-3">
-        {trips.length === 0 ? (
-          <Card>
-            <p className="text-sm text-slate-500">저장된 일정이 없습니다. 플래너에서 일정을 생성해 보세요.</p>
-          </Card>
-        ) : (
-          trips.map((trip) => {
+      {trips.length === 0 ? (
+        <Card>
+          <p className="text-sm text-slate-500">저장된 일정이 없습니다. 플래너에서 일정을 생성해 보세요.</p>
+        </Card>
+      ) : (
+        <ul className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          {trips.map((trip) => {
             const region = JAPAN_REGIONS.find((r) => r.id === trip.region);
             return (
               <li key={trip.id}>
-                <Link href={`/trips/${trip.id}`}>
-                  <Card className="hover:border-rose-200">
-                    <p className="font-semibold">{trip.title}</p>
-                    <p className="text-sm text-slate-500">
-                      {region?.label} · {format(trip.startDate, "yyyy.MM.dd")} -{" "}
-                      {format(trip.endDate, "yyyy.MM.dd")}
-                    </p>
-                  </Card>
-                </Link>
+                <TripCard
+                  id={trip.id}
+                  title={trip.title}
+                  region={trip.region}
+                  regionLabel={region?.label ?? trip.region}
+                  startDate={trip.startDate}
+                  endDate={trip.endDate}
+                  days={trip.days}
+                />
               </li>
             );
-          })
-        )}
-      </ul>
+          })}
+        </ul>
+      )}
     </AppShell>
   );
 }
