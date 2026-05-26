@@ -10,6 +10,8 @@ const nextConfig: NextConfig = {
       { protocol: "https", hostname: "t1.kakaocdn.net" },
       { protocol: "https", hostname: "p.kakaocdn.net" },
       { protocol: "https", hostname: "images.unsplash.com" },
+      { protocol: "https", hostname: "img.travel.rakuten.co.jp" },
+      { protocol: "https", hostname: "trvimg.r10s.jp" },
     ],
   },
 };

@@ -47,23 +47,46 @@ export type AttractionResult = {
   tips?: string;
 };
 
+export type AccommodationType = "HOTEL" | "RYOKAN" | "GUESTHOUSE";
+export type AccommodationAmenity =
+  | "WIFI"
+  | "BREAKFAST"
+  | "ONSEN"
+  | "KITCHEN"
+  | "PARKING"
+  | "AIRPORT_BUS"
+  | "FAMILY"
+  | "NON_SMOKING";
+
 export type AccommodationSearchRequest = {
   region: JapanRegionId;
   checkIn: string;
   checkOut: string;
   guests: number;
   budgetKrw: number;
-  types?: ("HOTEL" | "RYOKAN" | "GUESTHOUSE")[];
+  types?: AccommodationType[];
+  amenities?: AccommodationAmenity[];
+  area?: string;
+  sort?: "recommended" | "price-asc" | "price-desc" | "rating-desc";
 };
 
 export type AccommodationResult = {
   id: string;
   name: string;
-  type: string;
+  type: AccommodationType;
   priceKrw: number;
   rating: number;
+  reviewCount?: number;
   bookingUrl: string;
   imageUrl?: string;
+  imageUrls?: string[];
+  area?: string;
+  nearestStation?: string;
+  walkMinutes?: number;
+  amenities?: AccommodationAmenity[];
+  highlight?: string;
+  score?: number;
+  recommendReason?: string;
 };
 
 export type ChatRequest = {

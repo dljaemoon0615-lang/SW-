@@ -3,9 +3,9 @@ import { StaySearch } from "@/features/stays/components/stay-search";
 
 export default function StaysPage() {
   return (
-    <AppShell title="숙박 검색">
+    <AppShell title="숙박 검색·추천">
       <p className="mb-4 text-sm text-slate-600">
-        AI 모델 연동 후 실제 숙소 검색 결과가 표시됩니다.
+        내 일정·예산·취향에 맞춰 호텔·료칸·게스트하우스를 추천해 드립니다.
       </p>
       <StaySearch />
     </AppShell>

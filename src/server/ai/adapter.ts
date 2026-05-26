@@ -12,6 +12,7 @@ import type {
 import type { JapanRegionId } from "@/shared/lib/constants";
 import { MOCK_ATTRACTIONS } from "@/features/attractions/server/mock-data";
 import { enrichAttraction } from "@/features/attractions/server/details";
+import { searchRakutenStays } from "@/server/rakuten/travel-client";
 
 const AI_BASE = process.env.AI_SERVICE_BASE_URL ?? "";
 const AI_KEY = process.env.AI_SERVICE_API_KEY ?? "";
@@ -88,27 +89,6 @@ function mockRestaurants(region: JapanRegionId): RestaurantResult[] {
   ];
 }
 
-function mockStays(): AccommodationResult[] {
-  return [
-    {
-      id: "s1",
-      name: "시내 비즈니스 호텔",
-      type: "HOTEL",
-      priceKrw: 120000,
-      rating: 4.4,
-      bookingUrl: "https://example.com/book/hotel",
-    },
-    {
-      id: "s2",
-      name: "전통 료칸",
-      type: "RYOKAN",
-      priceKrw: 280000,
-      rating: 4.8,
-      bookingUrl: "https://example.com/book/ryokan",
-    },
-  ];
-}
-
 function mockChat(req: ChatRequest): ChatResponse {
   const history = (req.tripContext?.history as { role: string }[] | undefined) ?? [];
   const turn = history.filter((h) => h.role === "user").length;
@@ -132,11 +112,14 @@ export const aiAdapter = {
     );
   },
 
-  async searchAccommodations(req: AccommodationSearchRequest) {
-    return (
-      (await callAi<AccommodationResult[]>("/accommodations/search", req)) ??
-      mockStays()
-    );
+  async searchAccommodations(req: AccommodationSearchRequest): Promise<AccommodationResult[]> {
+    const fromAi = await callAi<AccommodationResult[]>("/accommodations/search", req);
+    if (fromAi && fromAi.length > 0) return fromAi;
+
+    const fromRakuten = await searchRakutenStays(req);
+    if (fromRakuten && fromRakuten.length > 0) return fromRakuten;
+
+    return [];
   },
 
   async chat(req: ChatRequest) {
