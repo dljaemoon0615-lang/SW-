@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { KOREA_TO_JAPAN_CHECKLIST } from "@/features/checklist/server/checklist-defaults";
+import { Trash2 } from "lucide-react";
 
 type Item = { id: string; label: string; isChecked: boolean; isDefault: boolean };
 
@@ -82,12 +83,18 @@ export function ChecklistPanel() {
               <input type="checkbox" checked={item.isChecked} onChange={() => toggle(item.id)} />
               <span className={`flex-1 text-sm ${item.isChecked ? "line-through text-slate-400" : ""}`}>
                 {item.label}
+                {item.isDefault ? (
+                  <span className="ml-1.5 text-[10px] font-medium text-slate-400">기본</span>
+                ) : null}
               </span>
-              {!item.isDefault ? (
-                <button type="button" className="text-xs text-rose-500" onClick={() => removeItem(item.id)}>
-                  삭제
-                </button>
-              ) : null}
+              <button
+                type="button"
+                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                onClick={() => removeItem(item.id)}
+                aria-label={`${item.label} 삭제`}
+              >
+                <Trash2 size={16} />
+              </button>
             </Card>
           </li>
         ))}

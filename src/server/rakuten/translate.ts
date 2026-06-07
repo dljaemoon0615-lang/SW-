@@ -1,7 +1,13 @@
 /**
- * 라쿠텐 응답(일본어)의 호텔명·지역·특색 등을 한국어로 가능한 범위에서 치환합니다.
- * 매칭되지 않은 부분은 원문(일본어)으로 그대로 둡니다.
+ * 라쿠텐 응답(일본어)의 호텔명·지역·특색 등을 한국어로 변환합니다.
+ *
+ * 1) DEEPL_API_KEY 가 있으면 DeepL API (일·영→한) 우선
+ * 2) 없거나 실패 시 아래 사전(TRANSLATIONS) 치환
+ * 3) 사전에도 없으면 원문 유지
+ *
+ * .env: DEEPL_API_KEY=...  (무료: https://www.deepl.com/pro-api → API 키 발급)
  */
+import { buildKoTranslationMap } from "@/server/translate/ko-map";
 
 const TRANSLATIONS: Record<string, string> = {
   // 호텔 체인
@@ -226,7 +232,6 @@ const TRANSLATIONS: Record<string, string> = {
   "高濃度炭酸泉": "고농도 탄산천",
   "炭酸泉": "탄산천",
   "八重桜": "겹벚꽃",
-  "中央口": "중앙구(中央口)",
   "南口": "남쪽 출구",
   "北口": "북쪽 출구",
   "東口": "동쪽 출구",
@@ -329,4 +334,52 @@ export function translateArea(address: string | undefined): string | undefined {
 export function translateStation(station: string | undefined): string | undefined {
   if (!station) return undefined;
   return translateJa(station);
+}
+
+function pickTranslated(
+  text: string | undefined | null,
+  map: Map<string, string>,
+): string {
+  if (!text) return "";
+  const trimmed = text.trim();
+  return map.get(trimmed) ?? translateJa(trimmed);
+}
+
+/**
+ * 여러 문자열을 DeepL(일·영→한)로 일괄 번역한 뒤, 실패분은 사전 치환으로 보완한 Map을 만듭니다.
+ * travel-client 등에서 호텔 목록 매핑 전 1회 호출하세요.
+ */
+export async function buildJaKoTranslationMap(
+  texts: Array<string | undefined | null>,
+): Promise<Map<string, string>> {
+  return buildKoTranslationMap(texts, (text) => translateJa(text));
+}
+
+/** @deprecated buildJaKoTranslationMap 과 동일 */
+export const buildKoTranslationMapForRakuten = buildJaKoTranslationMap;
+
+export function translateHotelNameWithMap(
+  name: string,
+  map: Map<string, string>,
+): string {
+  if (!name) return name;
+  const normalized = normalizeFullWidth(name);
+  if (/^[\sA-Za-z0-9.,&'!\-_:]+$/.test(normalized)) return normalized;
+  return pickTranslated(name, map) || translateHotelName(name);
+}
+
+export function translateAreaWithMap(
+  address: string | undefined,
+  map: Map<string, string>,
+): string | undefined {
+  if (!address) return undefined;
+  return spaceOutAddress(pickTranslated(address, map));
+}
+
+export function translateStationWithMap(
+  station: string | undefined,
+  map: Map<string, string>,
+): string | undefined {
+  if (!station) return undefined;
+  return pickTranslated(station, map);
 }

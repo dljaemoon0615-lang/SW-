@@ -4,11 +4,24 @@ import { Card } from "@/shared/ui/card";
 import { auth } from "@/auth";
 import { SignOutButton } from "@/features/auth/components/sign-out-button";
 import { ProfileForm } from "@/features/profile/components/profile-form";
-import { DeleteAccountButton } from "@/features/profile/components/delete-account-button";
+import { DeleteAccountSection } from "@/features/profile/components/delete-account-button";
+import { prisma } from "@/server/db/prisma";
 
 export default async function ProfilePage() {
   const session = await auth();
-  if (!session?.user) redirect("/login");
+  if (!session?.user?.id) redirect("/login");
+
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: {
+      passwordHash: true,
+      accounts: { select: { provider: true } },
+    },
+  });
+
+  const hasPassword = Boolean(user?.passwordHash);
+  const oauthProviders =
+    user?.accounts.map((a) => a.provider).filter((p) => p !== "credentials") ?? [];
 
   return (
     <AppShell title="마이페이지">
@@ -21,7 +34,7 @@ export default async function ProfilePage() {
       <div className="mt-4">
         <SignOutButton />
       </div>
-      <DeleteAccountButton />
+      <DeleteAccountSection hasPassword={hasPassword} oauthProviders={oauthProviders} />
     </AppShell>
   );
 }

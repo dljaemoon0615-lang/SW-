@@ -12,9 +12,19 @@ type TripCardProps = {
   startDate: Date;
   endDate: Date;
   days: { items: { placeName: string }[] }[];
+  badge?: string;
 };
 
-export function TripCard({ id, title, region, regionLabel, startDate, endDate, days }: TripCardProps) {
+export function TripCard({
+  id,
+  title,
+  region,
+  regionLabel,
+  startDate,
+  endDate,
+  days,
+  badge,
+}: TripCardProps) {
   const trip = { region, days };
   const cover = getTripCoverImage(trip);
   const thumbs = getTripGalleryImages(trip, 4).filter((u) => u !== cover).slice(0, 3);
@@ -30,6 +40,11 @@ export function TripCard({ id, title, region, regionLabel, startDate, endDate, d
           sizes="(max-width: 640px) 100vw, 50vw"
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/20 to-transparent" />
+        {badge ? (
+          <span className="absolute left-3 top-3 rounded-full bg-sky-500/90 px-2 py-0.5 text-[11px] font-medium text-white">
+            {badge}
+          </span>
+        ) : null}
         <div className="absolute bottom-0 left-0 right-0 p-4 text-white">
           <p className="text-xs font-medium uppercase tracking-wide text-white/80">{regionLabel}</p>
           <h3 className="mt-0.5 text-lg font-bold leading-tight">{title}</h3>

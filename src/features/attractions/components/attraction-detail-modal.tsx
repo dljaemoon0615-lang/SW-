@@ -5,7 +5,9 @@ import Image from "next/image";
 import { Badge } from "@/shared/ui/badge";
 import { Button } from "@/shared/ui/button";
 import type { AttractionResult } from "@/server/ai/types";
-import { Clock, ExternalLink, MapPin, Star, Ticket, X } from "lucide-react";
+import { AttractionRatingSection } from "@/features/attractions/components/attraction-rating-section";
+import { StarRatingDisplay } from "@/features/attractions/components/star-rating-display";
+import { Clock, ExternalLink, MapPin, Ticket, Users, X } from "lucide-react";
 
 type Props = {
   attraction: AttractionResult | null;
@@ -49,10 +51,18 @@ export function AttractionDetailModal({ attraction, onClose }: Props) {
   if (!attraction) return null;
 
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${attraction.lat},${attraction.lng}`;
+  const crowdLabel =
+    attraction.crowdLevel === "HIGH"
+      ? "현재 혼잡"
+      : attraction.crowdLevel === "MEDIUM"
+        ? "현재 보통"
+        : attraction.crowdLevel === "LOW"
+          ? "현재 여유"
+          : null;
 
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-end justify-center p-0 sm:items-center sm:p-4"
+      className="fixed inset-0 z-[500] flex items-end justify-center p-0 sm:items-center sm:p-4"
       role="dialog"
       aria-modal="true"
       aria-label={`${attraction.name} 상세 정보`}
@@ -65,15 +75,15 @@ export function AttractionDetailModal({ attraction, onClose }: Props) {
       />
 
       <div
-        className="relative z-10 flex max-h-[92vh] w-full max-w-2xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[90vh] sm:rounded-2xl"
+        className="relative z-10 flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-2xl bg-white shadow-2xl sm:max-h-[88vh] sm:rounded-2xl md:flex-row md:max-h-[min(88vh,720px)]"
         onClick={(e) => e.stopPropagation()}
       >
-        <div className="relative shrink-0">
+        <div className="relative shrink-0 md:flex md:min-h-0 md:w-[min(46%,400px)] md:flex-col md:self-stretch">
           {photos.length > 0 ? (
             <button
               type="button"
               onClick={() => setLightbox(true)}
-              className="relative block aspect-[4/3] w-full cursor-zoom-in bg-slate-100 sm:aspect-[16/10]"
+              className="relative block aspect-[4/3] w-full cursor-zoom-in bg-slate-100 md:aspect-auto md:min-h-[280px] md:flex-1"
               aria-label="사진 크게 보기"
             >
               <Image
@@ -83,6 +93,7 @@ export function AttractionDetailModal({ attraction, onClose }: Props) {
                 className="object-cover object-center"
                 sizes="(max-width: 768px) 100vw, 672px"
                 priority
+                unoptimized
               />
               <span className="absolute bottom-3 right-3 rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
                 탭하여 확대
@@ -131,7 +142,7 @@ export function AttractionDetailModal({ attraction, onClose }: Props) {
               ) : null}
             </button>
           ) : (
-            <div className="flex aspect-[4/3] items-center justify-center bg-slate-100 text-slate-500 sm:aspect-[16/10]">
+            <div className="flex aspect-[4/3] items-center justify-center bg-slate-100 text-slate-500 md:min-h-[280px] md:flex-1">
               사진 없음
             </div>
           )}
@@ -139,21 +150,17 @@ export function AttractionDetailModal({ attraction, onClose }: Props) {
           <button
             type="button"
             onClick={onClose}
-            className="absolute right-3 top-3 rounded-full bg-black/50 p-2 text-white backdrop-blur-sm hover:bg-black/65"
+            className="absolute right-3 top-3 z-10 rounded-full bg-black/50 p-2 text-white backdrop-blur-sm hover:bg-black/65 md:right-auto md:left-3"
             aria-label="닫기"
           >
             <X size={20} />
           </button>
         </div>
 
-        <div className="min-h-0 flex-1 overflow-y-auto px-4 pb-6 pt-4 sm:px-6">
-          <div className="flex items-start justify-between gap-3">
-            <h2 className="text-xl font-bold text-slate-900">{attraction.name}</h2>
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-amber-50 px-2.5 py-1 text-sm font-semibold text-amber-800">
-              <Star size={15} className="fill-amber-500 text-amber-500" />
-              {attraction.rating}
-            </span>
-          </div>
+        <div className="min-h-0 flex-1 overflow-y-auto border-t border-slate-100 px-4 pb-6 pt-4 sm:px-6 md:border-l md:border-t-0">
+          <h2 className="text-xl font-bold text-slate-900">{attraction.name}</h2>
+
+          <AttractionRatingSection attraction={attraction} />
 
           {attraction.bestVisitTags?.length ? (
             <div className="mt-3 flex flex-wrap gap-1.5">
@@ -180,6 +187,15 @@ export function AttractionDetailModal({ attraction, onClose }: Props) {
               <p className="flex items-start gap-2">
                 <MapPin size={16} className="mt-0.5 shrink-0 text-slate-400" />
                 {attraction.address}
+              </p>
+            ) : null}
+            {crowdLabel ? (
+              <p className="flex items-center gap-2">
+                <Users size={16} className="shrink-0 text-indigo-500" />
+                {crowdLabel}
+                {typeof attraction.estimatedWaitMinutes === "number"
+                  ? ` · 예상 대기 ${attraction.estimatedWaitMinutes}분`
+                  : ""}
               </p>
             ) : null}
           </div>
@@ -209,10 +225,33 @@ export function AttractionDetailModal({ attraction, onClose }: Props) {
             </div>
           ) : null}
 
+          {attraction.recommendedTimeSlots?.length ? (
+            <div className="mt-4 rounded-xl border border-indigo-100 bg-indigo-50/70 px-3 py-2.5">
+              <p className="text-xs font-medium text-indigo-900">추천 방문 시간대</p>
+              <p className="mt-1 text-sm text-indigo-950">
+                {attraction.recommendedTimeSlots.join(" · ")}
+              </p>
+              {attraction.crowdReason ? (
+                <p className="mt-1 text-xs text-indigo-900/80">{attraction.crowdReason}</p>
+              ) : null}
+            </div>
+          ) : null}
+
           <div className="mt-5 flex flex-col gap-2 sm:flex-row">
             <Button type="button" variant="secondary" className="flex-1" onClick={onClose}>
               닫기
             </Button>
+            {attraction.wikiUrl ? (
+              <a
+                href={attraction.wikiUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                <ExternalLink size={16} />
+                위키백과
+              </a>
+            ) : null}
             <a
               href={mapsUrl}
               target="_blank"
@@ -228,23 +267,23 @@ export function AttractionDetailModal({ attraction, onClose }: Props) {
 
       {lightbox && photos.length > 0 ? (
         <div
-          className="fixed inset-0 z-[110] flex flex-col bg-black/95"
+          className="fixed inset-0 z-[510] flex flex-col bg-black/95 md:flex-row"
           role="dialog"
           aria-label="사진 확대 보기"
         >
           <button
             type="button"
-            className="absolute inset-0"
+            className="absolute inset-0 md:hidden"
             aria-label="닫기"
             onClick={() => setLightbox(false)}
           />
-          <div className="relative z-10 flex min-h-0 flex-1 items-center justify-center p-4 pt-14">
+          <div className="relative z-10 flex min-h-0 min-w-0 flex-1 items-center justify-center p-4 pt-14 md:p-6 md:pt-6">
             <Image
               src={photos[photoIndex]}
               alt={attraction.name}
               width={1600}
               height={1200}
-              className="relative z-10 max-h-[85vh] w-auto max-w-full object-contain"
+              className="relative z-10 max-h-[50vh] w-auto max-w-full object-contain md:max-h-[88vh]"
               unoptimized
             />
             {photos.length > 1 ? (
@@ -255,7 +294,7 @@ export function AttractionDetailModal({ attraction, onClose }: Props) {
                     e.stopPropagation();
                     setPhotoIndex((i) => (i - 1 + photos.length) % photos.length);
                   }}
-                  className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/15 px-3 py-2 text-2xl text-white hover:bg-white/25"
+                  className="absolute left-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/15 px-3 py-2 text-2xl text-white hover:bg-white/25 md:left-4"
                   aria-label="이전"
                 >
                   ‹
@@ -266,17 +305,46 @@ export function AttractionDetailModal({ attraction, onClose }: Props) {
                     e.stopPropagation();
                     setPhotoIndex((i) => (i + 1) % photos.length);
                   }}
-                  className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/15 px-3 py-2 text-2xl text-white hover:bg-white/25"
+                  className="absolute right-2 top-1/2 z-20 -translate-y-1/2 rounded-full bg-white/15 px-3 py-2 text-2xl text-white hover:bg-white/25 md:right-4"
                   aria-label="다음"
                 >
                   ›
                 </button>
-                <p className="absolute bottom-6 left-1/2 z-20 -translate-x-1/2 text-sm text-white/80">
+                <p className="absolute bottom-6 left-1/2 z-20 -translate-x-1/2 text-sm text-white/80 md:bottom-8">
                   {photoIndex + 1} / {photos.length}
                 </p>
               </>
             ) : null}
           </div>
+          <aside className="relative z-10 hidden min-h-0 w-full max-w-md flex-col overflow-y-auto border-l border-white/10 bg-slate-950/90 p-5 text-white md:flex">
+            <h2 className="text-lg font-bold">{attraction.name}</h2>
+            {attraction.rating ? (
+              <div className="mt-2">
+                <StarRatingDisplay
+                  value={attraction.rating}
+                  size="sm"
+                  reviewCount={attraction.reviewCount}
+                  tone="dark"
+                  className="text-white"
+                />
+              </div>
+            ) : null}
+            {attraction.description ? (
+              <p className="mt-3 text-sm leading-relaxed text-white/85">{attraction.description}</p>
+            ) : null}
+            <div className="mt-4 space-y-2 text-sm text-white/75">
+              {attraction.fee ? <p>입장료 {attraction.fee}</p> : null}
+              {attraction.hours ? <p>운영 {attraction.hours}</p> : null}
+              {crowdLabel ? (
+                <p>
+                  {crowdLabel}
+                  {typeof attraction.estimatedWaitMinutes === "number"
+                    ? ` · 대기 약 ${attraction.estimatedWaitMinutes}분`
+                    : ""}
+                </p>
+              ) : null}
+            </div>
+          </aside>
           <button
             type="button"
             onClick={() => setLightbox(false)}

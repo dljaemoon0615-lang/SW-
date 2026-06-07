@@ -1,7 +1,6 @@
 import type {
   AccommodationResult,
   AccommodationSearchRequest,
-  AttractionResult,
   ChatRequest,
   ChatResponse,
   ItineraryGenerateRequest,
@@ -10,8 +9,6 @@ import type {
   RestaurantSearchRequest,
 } from "./types";
 import type { JapanRegionId } from "@/shared/lib/constants";
-import { MOCK_ATTRACTIONS } from "@/features/attractions/server/mock-data";
-import { enrichAttraction } from "@/features/attractions/server/details";
 import { searchRakutenStays } from "@/server/rakuten/travel-client";
 
 const AI_BASE = process.env.AI_SERVICE_BASE_URL ?? "";
@@ -56,12 +53,8 @@ function mockItinerary(req: ItineraryGenerateRequest): ItineraryGenerateResponse
         ],
       },
     ],
-    attractions: mockAttractions(req.region),
+    attractions: [],
   };
-}
-
-function mockAttractions(region: JapanRegionId): AttractionResult[] {
-  return MOCK_ATTRACTIONS[region] ?? [];
 }
 
 function mockRestaurants(region: JapanRegionId): RestaurantResult[] {
@@ -70,6 +63,8 @@ function mockRestaurants(region: JapanRegionId): RestaurantResult[] {
       id: "r1",
       name: region === "TOKYO" ? "츠키지 스시" : "현지 인기 라멘",
       cuisine: "일식",
+      menuItems: region === "TOKYO" ? ["니기리", "사시미", "오마카세"] : ["돈코츠 라멘", "쇼유 라멘", "차슈멘"],
+      menuSummary: region === "TOKYO" ? "신선한 회와 니기리를 즐길 수 있는 스시 전문점입니다." : "진한 돈코츠 국물 라멘이 인기인 현지 맛집입니다.",
       rating: 4.6,
       distanceKm: 0.8,
       avgPriceKrw: 25000,
@@ -80,6 +75,8 @@ function mockRestaurants(region: JapanRegionId): RestaurantResult[] {
       id: "r2",
       name: "이자카야 거리 맛집",
       cuisine: "이자카야",
+      menuItems: ["야키토리", "사케", "사시미", "맥주"],
+      menuSummary: "저녁에 가볍게 안주와 사케를 즐기기 좋은 이자카야입니다.",
       rating: 4.3,
       distanceKm: 1.2,
       avgPriceKrw: 18000,
@@ -131,11 +128,5 @@ export const aiAdapter = {
       (await callAi<RestaurantResult[]>("/restaurants/search", req)) ??
       mockRestaurants(req.region)
     );
-  },
-
-  async getAttractions(region: JapanRegionId) {
-    const fromAi = await callAi<AttractionResult[]>("/attractions", { region });
-    const items = fromAi ?? mockAttractions(region);
-    return items.map((a) => enrichAttraction(a));
   },
 };

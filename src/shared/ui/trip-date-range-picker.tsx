@@ -121,14 +121,14 @@ export function TripDateRangePicker({
 
   const triggerClass =
     variant === "hero"
-      ? "w-full text-left text-base text-[#333] outline-none"
+      ? "w-full text-left outline-none"
       : "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm text-slate-800";
 
   return (
     <div ref={rootRef} className="relative w-full">
       <label htmlFor={id} className={variant === "hero" ? undefined : "mb-1 block text-sm font-medium"}>
         {variant === "hero" ? (
-          <span className="mb-1 block text-xs font-bold text-[#888]">{label}</span>
+          <span className="sb-label">{label}</span>
         ) : (
           label
         )}
@@ -141,10 +141,14 @@ export function TripDateRangePicker({
         aria-expanded={open}
         aria-haspopup="dialog"
       >
-        <Calendar size={variant === "hero" ? 18 : 16} className="shrink-0 text-[var(--primary)]" />
+        {variant !== "hero" ? (
+          <Calendar size={16} className="shrink-0 text-[var(--primary)]" />
+        ) : null}
         <span className="min-w-0 flex-1">
-          <span className="block font-semibold">{durationLabel}</span>
-          <span className={variant === "hero" ? "text-xs text-[#888]" : "text-xs text-slate-500"}>
+          <span className={variant === "hero" ? "sb-value block" : "block font-semibold"}>
+            {durationLabel}
+          </span>
+          <span className={variant === "hero" ? "sb-sub block" : "text-xs text-slate-500"}>
             {formatTripRangeLabel(value.startDate, value.endDate)}
           </span>
         </span>

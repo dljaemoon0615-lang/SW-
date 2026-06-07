@@ -7,11 +7,12 @@ import type {
 } from "@/server/ai/types";
 import type { JapanRegionId } from "@/shared/lib/constants";
 import {
+  buildJaKoTranslationMap,
   isMostlyJapanese,
-  translateArea,
-  translateHotelName,
+  translateAreaWithMap,
+  translateHotelNameWithMap,
   translateJa,
-  translateStation,
+  translateStationWithMap,
 } from "./translate";
 
 const ENDPOINT =
@@ -219,7 +220,18 @@ export async function searchRakutenStays(
 
   const rate = await fetchExchangeRate();
 
-  const items: AccommodationResult[] = Array.from(merged.values())
+  const hotelList = Array.from(merged.values());
+  const translationMap = await buildJaKoTranslationMap(
+    hotelList.flatMap((info) => [
+      info.hotelName,
+      info.address1,
+      info.address2,
+      info.hotelSpecial,
+      nearestStationFromAccess(info.access),
+    ]),
+  );
+
+  const items: AccommodationResult[] = hotelList
     .map((info) => {
       const priceJpy = info.hotelMinCharge ?? 0;
       const priceKrw = priceJpy > 0 ? jpyToKrw(priceJpy, rate) : 0;
@@ -229,7 +241,10 @@ export async function searchRakutenStays(
         .filter((u): u is string => !!u)
         .filter((u, i, arr) => arr.indexOf(u) === i);
 
-      const translatedSpecial = info.hotelSpecial ? translateJa(info.hotelSpecial) : "";
+      const translatedSpecial = info.hotelSpecial
+        ? (translationMap.get(info.hotelSpecial.trim()) ??
+          translateJa(info.hotelSpecial))
+        : "";
       const trimmedSpecial = translatedSpecial.slice(0, 24);
       const highlight = trimmedSpecial && !isMostlyJapanese(trimmedSpecial)
         ? trimmedSpecial
@@ -237,10 +252,13 @@ export async function searchRakutenStays(
 
       return {
         id: `rk-${info.hotelNo}`,
-        name: translateHotelName(info.hotelName),
+        name: translateHotelNameWithMap(info.hotelName, translationMap),
         type,
-        area: translateArea(info.address2 || info.address1),
-        nearestStation: translateStation(nearestStationFromAccess(info.access)),
+        area: translateAreaWithMap(info.address2 || info.address1, translationMap),
+        nearestStation: translateStationWithMap(
+          nearestStationFromAccess(info.access),
+          translationMap,
+        ),
         walkMinutes: walkMinutesFromAccess(info.access),
         priceKrw,
         rating: info.reviewAverage ?? 0,

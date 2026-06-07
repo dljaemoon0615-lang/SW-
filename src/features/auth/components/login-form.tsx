@@ -9,6 +9,7 @@ export function LoginForm() {
   const router = useRouter();
   const params = useSearchParams();
   const callbackUrl = params.get("callbackUrl") ?? "/";
+  const resetDone = params.get("reset") === "1";
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -52,6 +53,9 @@ export function LoginForm() {
         onChange={(e) => setPassword(e.target.value)}
         className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm"
       />
+      {resetDone ? (
+        <p className="text-sm text-emerald-700">비밀번호가 변경되었습니다. 새 비밀번호로 로그인하세요.</p>
+      ) : null}
       {error ? <p className="text-sm text-rose-600">{error}</p> : null}
       <Button type="submit" className="w-full" disabled={loading}>
         {loading ? "로그인 중..." : "로그인"}

@@ -1,4 +1,7 @@
-export const APP_NAME = "MY TRIP";
+export const APP_NAME = "NOW MEET GO";
+export const APP_TAGLINE = "나믿고";
+export const APP_TAGLINE_JA = "ナミコ、いま会いに行きます。";
+export const APP_DESCRIPTION = "나믿고, 떠나는 완벽한 일본 여행";
 
 export const JAPAN_REGIONS = [
   { id: "OSAKA_KYOTO", label: "오사카·교토", description: "간사이 권역 통합 일정" },
@@ -24,7 +27,7 @@ export const FEATURES = [
   { href: "/trips", title: "일정 저장·공유", desc: "마이페이지 · 동행자 편집" },
   { href: "/budget", title: "예산 관리", desc: "배분 제안 · 환율 반영" },
   { href: "/restaurants", title: "맛집 추천", desc: "필터 · 영업시간 표시" },
-  { href: "/attractions", title: "관광지 정보", desc: "리뷰 · 추천 방문 시간" },
+  { href: "/attractions", title: "관광지 정보", desc: "지도·리스트 · 추천 방문 시간" },
   { href: "/stays", title: "숙박 검색", desc: "호텔·료칸·게하" },
   { href: "/settings/notifications", title: "카카오 알림", desc: "당일 일정 자동 발송" },
 ] as const;

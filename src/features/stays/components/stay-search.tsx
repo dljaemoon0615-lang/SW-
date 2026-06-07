@@ -3,10 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
+import { applyStayFilters } from "@/features/stays/lib/apply-stay-filters";
+import type { StaySearchResponse } from "@/features/stays/server/stays.service";
 import { JAPAN_REGIONS, type JapanRegionId } from "@/shared/lib/constants";
 import type {
   AccommodationAmenity,
   AccommodationResult,
+  AccommodationSearchRequest,
   AccommodationType,
 } from "@/server/ai/types";
 import { Calendar, CalendarCheck, Search, Sparkles, SlidersHorizontal } from "lucide-react";
@@ -57,25 +60,61 @@ function nightsBetween(checkIn: string, checkOut: string): number {
   return Math.max(1, Math.round((b - a) / (1000 * 60 * 60 * 24)));
 }
 
-export function StaySearch() {
+type StaySearchProps = {
+  initialByRegion: Record<JapanRegionId, StaySearchResponse>;
+  defaultSearch: Omit<AccommodationSearchRequest, "region">;
+};
+
+export function StaySearch({ initialByRegion, defaultSearch }: StaySearchProps) {
   const [region, setRegion] = useState<JapanRegionId>("TOKYO");
-  const [checkIn, setCheckIn] = useState("");
-  const [checkOut, setCheckOut] = useState("");
-  const [guests, setGuests] = useState(2);
-  const [budgetKrw, setBudgetKrw] = useState(150000);
-  const [types, setTypes] = useState<AccommodationType[]>(["HOTEL", "RYOKAN", "GUESTHOUSE"]);
-  const [amenities, setAmenities] = useState<AccommodationAmenity[]>([]);
-  const [area, setArea] = useState<string>("");
-  const [sort, setSort] = useState<SortOption>("recommended");
+  const [checkIn, setCheckIn] = useState(defaultSearch.checkIn);
+  const [checkOut, setCheckOut] = useState(defaultSearch.checkOut);
+  const [guests, setGuests] = useState(defaultSearch.guests);
+  const [budgetKrw, setBudgetKrw] = useState(defaultSearch.budgetKrw);
+  const [types, setTypes] = useState<AccommodationType[]>(
+    defaultSearch.types ?? ["HOTEL", "RYOKAN", "GUESTHOUSE"],
+  );
+  const [amenities, setAmenities] = useState<AccommodationAmenity[]>(
+    defaultSearch.amenities ?? [],
+  );
+  const [area, setArea] = useState<string>(defaultSearch.area ?? "");
+  const [sort, setSort] = useState<SortOption>(defaultSearch.sort ?? "recommended");
 
   const [trips, setTrips] = useState<TripOption[]>([]);
   const [linkedTripId, setLinkedTripId] = useState<string | null>(null);
 
-  const [items, setItems] = useState<AccommodationResult[]>([]);
-  const [recommended, setRecommended] = useState<AccommodationResult[]>([]);
-  const [areas, setAreas] = useState<string[]>([]);
+  /** 날짜 등을 바꿔 API로 다시 받은 풀 (없으면 프리로드 풀 사용) */
+  const [livePool, setLivePool] = useState<AccommodationResult[] | null>(null);
   const [loading, setLoading] = useState(false);
-  const [hasSearched, setHasSearched] = useState(false);
+
+  const poolsByRegion = useMemo(() => {
+    const out = {} as Record<JapanRegionId, AccommodationResult[]>;
+    for (const r of JAPAN_REGIONS) {
+      out[r.id] = initialByRegion[r.id]?.items ?? [];
+    }
+    return out;
+  }, [initialByRegion]);
+
+  const filterReq = useMemo(
+    (): Omit<AccommodationSearchRequest, "region"> => ({
+      checkIn,
+      checkOut,
+      guests,
+      budgetKrw,
+      types,
+      amenities,
+      area: area || undefined,
+      sort,
+    }),
+    [checkIn, checkOut, guests, budgetKrw, types, amenities, area, sort],
+  );
+
+  const display = useMemo(() => {
+    const pool = livePool ?? poolsByRegion[region] ?? [];
+    return applyStayFilters(pool, { region, ...filterReq });
+  }, [livePool, poolsByRegion, region, filterReq]);
+
+  const { items, recommended, areas } = display;
 
   useEffect(() => {
     fetch("/api/trips")
@@ -108,8 +147,15 @@ export function StaySearch() {
   }
 
   async function search() {
+    const datesMatchDefault =
+      checkIn === defaultSearch.checkIn && checkOut === defaultSearch.checkOut;
+
+    if (datesMatchDefault) {
+      setLivePool(null);
+      return;
+    }
+
     setLoading(true);
-    setHasSearched(true);
     const q = new URLSearchParams({
       region,
       checkIn,
@@ -118,6 +164,7 @@ export function StaySearch() {
       budgetKrw: String(budgetKrw),
       types: types.join(","),
       sort,
+      live: "1",
     });
     if (amenities.length) q.set("amenities", amenities.join(","));
     if (area) q.set("area", area);
@@ -125,12 +172,16 @@ export function StaySearch() {
     try {
       const res = await fetch(`/api/ai/accommodations?${q}`);
       const data = await res.json();
-      setItems(data.items ?? []);
-      setRecommended(data.recommended ?? []);
-      setAreas(data.areas ?? []);
+      setLivePool(data.items ?? []);
     } finally {
       setLoading(false);
     }
+  }
+
+  function onRegionChange(next: JapanRegionId) {
+    setRegion(next);
+    setLivePool(null);
+    setArea("");
   }
 
   const nights = useMemo(() => nightsBetween(checkIn, checkOut), [checkIn, checkOut]);
@@ -177,7 +228,7 @@ export function StaySearch() {
       <Card className="space-y-3">
         <select
           value={region}
-          onChange={(e) => setRegion(e.target.value as JapanRegionId)}
+          onChange={(e) => onRegionChange(e.target.value as JapanRegionId)}
           className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
         >
           {JAPAN_REGIONS.map((r) => (
@@ -304,9 +355,9 @@ export function StaySearch() {
           </div>
         ) : null}
 
-        <Button type="button" className="w-full" onClick={search}>
+        <Button type="button" className="w-full" onClick={search} disabled={loading}>
           <Search size={14} className="mr-1.5" />
-          숙소 검색
+          {loading ? "조회 중..." : "날짜·예산 변경 후 재검색"}
         </Button>
       </Card>
 
@@ -325,10 +376,6 @@ export function StaySearch() {
             </li>
           ))}
         </ul>
-      ) : !hasSearched ? (
-        <Card className="text-center">
-          <p className="text-sm text-slate-500">조건을 선택하고 검색해 보세요.</p>
-        </Card>
       ) : items.length === 0 ? (
         <Card className="text-center">
           <p className="text-sm text-slate-500">조건에 맞는 숙소가 없습니다. 필터를 조정해 주세요.</p>
@@ -361,12 +408,7 @@ export function StaySearch() {
               <h2 className="text-sm font-semibold text-slate-800">전체 결과 {items.length}곳</h2>
               <select
                 value={sort}
-                onChange={(e) => {
-                  setSort(e.target.value as SortOption);
-                  if (hasSearched) {
-                    setTimeout(search, 0);
-                  }
-                }}
+                onChange={(e) => setSort(e.target.value as SortOption)}
                 className="rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs"
               >
                 {SORT_OPTIONS.map((o) => (

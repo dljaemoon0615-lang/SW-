@@ -2,42 +2,37 @@
 
 import { useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  arrayMove,
-  SortableContext,
-  sortableKeyboardCoordinates,
-  useSortable,
-  verticalListSortingStrategy,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
 import { TripDateRangePicker } from "@/shared/ui/trip-date-range-picker";
+import { SortableDayItems, type SortablePlaceItem } from "@/features/itinerary/components/sortable-day-items";
 import { JAPAN_REGIONS, type JapanRegionId } from "@/shared/lib/constants";
 import { defaultTripRange, type TripDateRange } from "@/shared/lib/trip-dates";
 import type { ItineraryDay } from "@/server/ai/types";
 
-function SortableItem({ id, label, time }: { id: string; label: string; time?: string }) {
-  const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id });
-  const style = { transform: CSS.Transform.toString(transform), transition };
+type PlannerItem = SortablePlaceItem & {
+  placeId?: string;
+};
 
-  return (
-    <li ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <Card className="mb-2 flex cursor-grab items-center justify-between !py-3">
-        <span className="text-sm font-medium">{label}</span>
-        {time ? <span className="text-xs text-slate-500">{time}</span> : null}
-      </Card>
-    </li>
-  );
+type PlannerDay = {
+  dayIndex: number;
+  date: string;
+  items: PlannerItem[];
+};
+
+function withStableIds(days: ItineraryDay[]): PlannerDay[] {
+  return days.map((day) => ({
+    dayIndex: day.dayIndex,
+    date: day.date,
+    items: day.items.map((item) => ({
+      id: crypto.randomUUID(),
+      placeName: item.placeName,
+      startTime: item.startTime,
+      endTime: item.endTime,
+      transport: item.transport,
+      placeId: item.placeId,
+    })),
+  }));
 }
 
 export function PlannerPanel() {
@@ -47,7 +42,7 @@ export function PlannerPanel() {
   const [dateRange, setDateRange] = useState<TripDateRange>(() => defaultTripRange());
   const [travelers, setTravelers] = useState(2);
   const [budgetKrw, setBudgetKrw] = useState(1500000);
-  const [days, setDays] = useState<ItineraryDay[]>([]);
+  const [days, setDays] = useState<PlannerDay[]>([]);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -68,11 +63,6 @@ export function PlannerPanel() {
     }
   }, [searchParams]);
 
-  const sensors = useSensors(
-    useSensor(PointerSensor),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
-  );
-
   async function generate() {
     setLoading(true);
     const res = await fetch("/api/ai/itinerary", {
@@ -88,21 +78,13 @@ export function PlannerPanel() {
       }),
     });
     const data = await res.json();
-    setDays(data.days ?? []);
+    setDays(withStableIds(data.days ?? []));
     setLoading(false);
   }
 
-  function onDragEnd(dayIndex: number, event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-
+  function updateDayItems(dayIndex: number, items: SortablePlaceItem[]) {
     setDays((prev) =>
-      prev.map((day, idx) => {
-        if (idx !== dayIndex) return day;
-        const oldIndex = day.items.findIndex((_, i) => `${dayIndex}-${i}` === active.id);
-        const newIndex = day.items.findIndex((_, i) => `${dayIndex}-${i}` === over.id);
-        return { ...day, items: arrayMove(day.items, oldIndex, newIndex) };
-      }),
+      prev.map((day) => (day.dayIndex === dayIndex ? { ...day, items } : day)),
     );
   }
 
@@ -148,32 +130,25 @@ export function PlannerPanel() {
         </Button>
       </Card>
 
-      {days.map((day, dayIndex) => (
+      {days.length > 0 ? (
+        <p className="text-sm text-slate-600">
+          각 일차에서 ≡으로 순서를 바꾸고, 시간·이동 수단을 입력할 수 있습니다. (플래너 미리보기 —
+          저장된 일정에 반영하려면 일정 저장 후 trips에서 확인)
+        </p>
+      ) : null}
+
+      {days.map((day) => (
         <Card key={day.dayIndex}>
           <h3 className="mb-2 font-semibold">
             {day.dayIndex}일차 · {day.date}
           </h3>
-          <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={(e) => onDragEnd(dayIndex, e)}
-          >
-            <SortableContext
-              items={day.items.map((_, i) => `${dayIndex}-${i}`)}
-              strategy={verticalListSortingStrategy}
-            >
-              <ul>
-                {day.items.map((item, i) => (
-                  <SortableItem
-                    key={`${dayIndex}-${i}`}
-                    id={`${dayIndex}-${i}`}
-                    label={item.placeName}
-                    time={item.startTime}
-                  />
-                ))}
-              </ul>
-            </SortableContext>
-          </DndContext>
+          <SortableDayItems
+            items={day.items}
+            region={region}
+            editable
+            onChange={(items) => updateDayItems(day.dayIndex, items)}
+            emptyMessage="이 날짜에 배정된 장소가 없습니다."
+          />
         </Card>
       ))}
     </div>

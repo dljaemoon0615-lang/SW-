@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
-import { Bot, X } from "lucide-react";
+import { MessageCircle, X } from "lucide-react";
 import { ChatPanel } from "@/features/chat/components/chat-panel";
 
 const HIDE_ON = new Set(["/login", "/register", "/forgot-password", "/chat"]);
@@ -38,14 +38,14 @@ export function AiChatWidget() {
 
       {open ? (
         <div
-          className="fixed bottom-24 right-4 z-[70] flex h-[min(70vh,520px)] w-[min(calc(100vw-2rem),400px)] flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl md:bottom-6 md:right-6"
+          className="ai-chat-panel fixed bottom-24 right-4 z-[70] flex h-[min(70vh,520px)] w-[min(calc(100vw-2rem),400px)] flex-col overflow-hidden rounded-2xl border bg-white md:bottom-6 md:right-6"
           role="dialog"
           aria-label="AI 여행 상담"
         >
-          <header className="flex shrink-0 items-center justify-between border-b border-slate-100 bg-gradient-to-r from-rose-500 to-orange-400 px-4 py-3 text-white">
+          <header className="ai-chat-header flex shrink-0 items-center justify-between border-b border-white/20 px-4 py-3">
             <div className="flex items-center gap-2">
               <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
-                <Bot size={18} />
+                <MessageCircle size={18} />
               </span>
               <div>
                 <p className="text-sm font-semibold">AI 여행 상담</p>
@@ -72,9 +72,9 @@ export function AiChatWidget() {
         onClick={() => setOpen((v) => !v)}
         aria-label={open ? "AI 채팅 닫기" : "AI 채팅 열기"}
         aria-expanded={open}
-        className="fixed bottom-24 right-4 z-[80] flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-rose-500 to-orange-400 text-white shadow-lg shadow-rose-500/30 transition hover:scale-105 hover:shadow-xl active:scale-95 md:bottom-6 md:right-6"
+        className="ai-chat-fab fixed bottom-24 right-4 z-[80] md:bottom-6 md:right-6"
       >
-        {open ? <X size={26} strokeWidth={2.25} /> : <Bot size={26} strokeWidth={2.25} />}
+        {open ? <X size={24} strokeWidth={2.25} /> : <MessageCircle size={24} strokeWidth={2.25} />}
       </button>
     </>
   );

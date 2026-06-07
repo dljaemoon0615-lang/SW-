@@ -1,3 +1,7 @@
+/** 홈 히어로 배경 — 교토 풍경 (원본 메인과 동일 Unsplash) */
+export const HOME_HERO_BACKGROUND =
+  "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=1920&q=80";
+
 export const POPULAR_DESTINATIONS = [
   {
     id: "TOKYO",

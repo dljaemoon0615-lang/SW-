@@ -1,32 +1,47 @@
 import type { Metadata, Viewport } from "next";
-import { Noto_Sans_KR } from "next/font/google";
+import { Montserrat, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/shared/providers";
 import { getViewMode } from "@/shared/lib/view-mode-server";
+import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "@/shared/lib/constants";
 
 const notoSans = Noto_Sans_KR({
   variable: "--font-noto-sans",
   subsets: ["latin"],
-  weight: ["400", "500", "700"],
+  weight: ["300", "400", "500", "700", "900"],
+});
+
+const montserrat = Montserrat({
+  variable: "--font-montserrat",
+  subsets: ["latin"],
+  weight: ["700", "900"],
 });
 
 export const metadata: Metadata = {
-  title: "니혼 플래너 - 일본 여행 플래너",
-  description: "도쿄, 교토, 오사카, 삿포로 맞춤 일본 여행 일정 플래너",
+  title: `${APP_NAME} · ${APP_TAGLINE} — 일본 여행 플래너`,
+  description: APP_DESCRIPTION,
   manifest: "/manifest.json",
+  icons: {
+    icon: "/brand-icon.svg",
+    apple: "/brand-icon.svg",
+  },
 };
 
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#ff4757",
+  themeColor: "#7ba7e8",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const viewMode = await getViewMode();
 
   return (
-    <html lang="ko" data-view-mode={viewMode} className={`${notoSans.variable} h-full`}>
+    <html
+      lang="ko"
+      data-view-mode={viewMode}
+      className={`${notoSans.variable} ${montserrat.variable} h-full`}
+    >
       <body className="min-h-full antialiased">
         <Providers>{children}</Providers>
       </body>

@@ -19,7 +19,7 @@ const protectedPrefixes = [
   "/stays",
 ];
 
-const guestOnlyPaths = new Set(["/login", "/register", "/forgot-password"]);
+const guestOnlyPaths = new Set(["/login", "/register", "/forgot-password", "/reset-password"]);
 
 function normalizePath(pathname: string) {
   return pathname.startsWith("/m") ? pathname.replace(/^\/m/, "") || "/" : pathname;

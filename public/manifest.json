@@ -1,10 +1,10 @@
 {
-  "name": "니혼 플래너 - 일본 여행 플래너",
-  "short_name": "니혼 플래너",
-  "description": "도쿄, 교토, 오사카, 삿포로 맞춤 일본 여행 플래너",
+  "name": "NOW MEET GO · 나믿고",
+  "short_name": "나믿고",
+  "description": "나믿고, 떠나는 완벽한 일본 여행",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#f8f9fa",
-  "theme_color": "#ff4757",
+  "background_color": "#eef2fc",
+  "theme_color": "#7ba7e8",
   "lang": "ko"
 }

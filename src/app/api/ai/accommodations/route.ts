@@ -1,5 +1,10 @@
 import { NextResponse } from "next/server";
+import { applyStayFilters } from "@/features/stays/lib/apply-stay-filters";
 import { searchStays } from "@/features/stays/server";
+import {
+  ensureCatalogWarm,
+  getStaysForRegion,
+} from "@/server/preload/catalog";
 import type { JapanRegionId } from "@/shared/lib/constants";
 import type {
   AccommodationAmenity,
@@ -27,8 +32,8 @@ function parseList<T extends string>(value: string | null, allowed: T[]): T[] | 
   return parts.length ? parts : undefined;
 }
 
-export async function GET(req: Request) {
-  const { searchParams } = new URL(req.url);
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
   const region = (searchParams.get("region") ?? "TOKYO") as JapanRegionId;
   const sortParam = searchParams.get("sort") ?? "recommended";
   const sort = (
@@ -37,7 +42,7 @@ export async function GET(req: Request) {
       : "recommended"
   ) as "recommended" | "price-asc" | "price-desc" | "rating-desc";
 
-  const result = await searchStays({
+  const req = {
     region,
     checkIn: searchParams.get("checkIn") ?? "",
     checkOut: searchParams.get("checkOut") ?? "",
@@ -47,7 +52,21 @@ export async function GET(req: Request) {
     amenities: parseList(searchParams.get("amenities"), VALID_AMENITIES),
     area: searchParams.get("area") ?? undefined,
     sort,
-  });
+  };
 
+  const usePreload =
+    searchParams.get("preload") === "1" ||
+    (!req.checkIn && !req.checkOut && searchParams.get("live") !== "1");
+
+  if (usePreload) {
+    await ensureCatalogWarm();
+    const cached = getStaysForRegion(region);
+    if (cached?.items.length) {
+      const pool = cached.items;
+      return NextResponse.json(applyStayFilters(pool, req));
+    }
+  }
+
+  const result = await searchStays(req);
   return NextResponse.json(result);
 }

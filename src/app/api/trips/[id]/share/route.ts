@@ -1,20 +1,26 @@
 import { NextResponse } from "next/server";
-import { randomBytes } from "crypto";
 import { auth } from "@/auth";
+import { assertTripOwner } from "@/features/trips/server/trip-access";
 import { prisma } from "@/server/db/prisma";
+import { randomBytes } from "crypto";
 
 export async function POST(_: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
   if (!session?.user?.id) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { id } = await params;
-  const token = randomBytes(16).toString("hex");
+  const isOwner = await assertTripOwner(session.user.id, id);
+  if (!isOwner) return NextResponse.json({ error: "일정 소유자만 공유 링크를 만들 수 있습니다." }, { status: 403 });
 
-  const trip = await prisma.trip.updateMany({
-    where: { id, userId: session.user.id },
-    data: { shareToken: token },
+  const existing = await prisma.trip.findUnique({
+    where: { id },
+    select: { shareToken: true },
   });
+  const token = existing?.shareToken ?? randomBytes(16).toString("hex");
 
-  if (!trip.count) return NextResponse.json({ error: "Not found" }, { status: 404 });
+  if (!existing?.shareToken) {
+    await prisma.trip.update({ where: { id }, data: { shareToken: token } });
+  }
+
   return NextResponse.json({ shareToken: token });
 }

@@ -1,9 +1,17 @@
 import { NextResponse } from "next/server";
-import { listAttractions } from "@/features/attractions/server";
+import { getAttractionsByRegion } from "@/features/attractions/server";
+import {
+  ensureCatalogWarm,
+  getAttractionsForRegion,
+} from "@/server/preload/catalog";
 import type { JapanRegionId } from "@/shared/lib/constants";
+
+export const revalidate = 3600;
 
 export async function GET(req: Request) {
   const region = (new URL(req.url).searchParams.get("region") ?? "TOKYO") as JapanRegionId;
-  const items = await listAttractions(region);
-  return NextResponse.json({ items });
+  await ensureCatalogWarm();
+  const attractions =
+    getAttractionsForRegion(region) ?? (await getAttractionsByRegion(region));
+  return NextResponse.json({ attractions, items: attractions });
 }
