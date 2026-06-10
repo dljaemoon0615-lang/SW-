@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bell,
-  Calendar,
   FolderOpen,
   Hotel,
   ListChecks,
@@ -19,7 +18,6 @@ import { SHORTCUT_GROUPS } from "@/shared/lib/shortcut-groups";
 const ICONS: Record<string, LucideIcon> = {
   "/checklist": ListChecks,
   "/chat": MessageCircle,
-  "/planner": Calendar,
   "/trips": FolderOpen,
   "/budget": Wallet,
   "/restaurants": Utensils,

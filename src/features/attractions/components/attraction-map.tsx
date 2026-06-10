@@ -3,6 +3,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { AttractionResult } from "@/server/ai/types";
 import type { JapanRegionId } from "@/shared/lib/constants";
+import {
+  getPinMarkerDataUrl,
+  getPinMarkerDataUrlSync,
+  toGoogleMarkerIcon,
+} from "@/features/attractions/lib/pin-marker-icon";
 import { REGION_MAP_VIEW, hasValidCoords } from "@/features/attractions/lib/region-map";
 import { fetchGoogleMapsApiKey, loadGoogleMaps } from "@/shared/lib/load-google-maps";
 
@@ -14,32 +19,27 @@ type Props = {
   className?: string;
 };
 
-const MARKER_SIZE = 52;
-const MARKER_SIZE_SELECTED = 58;
-
 function photoUrl(a: AttractionResult): string | null {
   return a.imageUrls?.[0] ?? a.imageUrl ?? null;
 }
 
-function fallbackIconDataUrl(): string {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="52" height="52" viewBox="0 0 52 52">
-    <rect width="52" height="52" rx="12" fill="#fecdd3"/>
-    <text x="26" y="34" text-anchor="middle" font-size="22">📍</text>
-  </svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+function truncateName(name: string, max = 9): string {
+  const trimmed = name.trim();
+  if (trimmed.length <= max) return trimmed;
+  return `${trimmed.slice(0, max)}…`;
 }
 
-function markerIcon(
-  googleMaps: typeof google,
-  a: AttractionResult,
+function markerLabel(
+  name: string,
   selected: boolean,
-): google.maps.Icon {
-  const size = selected ? MARKER_SIZE_SELECTED : MARKER_SIZE;
-  const url = photoUrl(a) ?? fallbackIconDataUrl();
+): google.maps.MarkerLabel | null {
+  if (!selected) return null;
   return {
-    url,
-    scaledSize: new googleMaps.maps.Size(size, size),
-    anchor: new googleMaps.maps.Point(size / 2, size / 2),
+    text: truncateName(name, 12),
+    className: "attraction-map-marker-label",
+    color: "#2a3f7a",
+    fontSize: "11px",
+    fontWeight: "600",
   };
 }
 
@@ -56,6 +56,7 @@ export function AttractionMap({
   const onSelectRef = useRef(onSelect);
   const selectedIdRef = useRef(selectedId);
   const mappableKeyRef = useRef("");
+  const iconGenRef = useRef(0);
 
   useEffect(() => {
     onSelectRef.current = onSelect;
@@ -70,7 +71,39 @@ export function AttractionMap({
     [items],
   );
 
+  const rankById = useMemo(() => {
+    const map = new Map<string, number>();
+    mappable.forEach((a, index) => map.set(a.id, index + 1));
+    return map;
+  }, [mappable]);
+
   const mappableKey = useMemo(() => mappable.map((a) => a.id).join("|"), [mappable]);
+
+  const applyMarkerIcon = useCallback(
+    async (
+      marker: google.maps.Marker,
+      a: AttractionResult,
+      rank: number,
+      selected: boolean,
+      gen: number,
+    ) => {
+      const fallback = getPinMarkerDataUrlSync(rank, selected);
+      marker.setIcon(toGoogleMarkerIcon(google, fallback, selected));
+
+      const url = photoUrl(a);
+      if (!url) return;
+
+      try {
+        const dataUrl = await getPinMarkerDataUrl(rank, selected, url);
+        if (gen !== iconGenRef.current) return;
+        if (markersByIdRef.current.get(a.id) !== marker) return;
+        marker.setIcon(toGoogleMarkerIcon(google, dataUrl, selected));
+      } catch {
+        /* 폴백 아이콘 유지 */
+      }
+    },
+    [],
+  );
 
   const fitToMarkers = useCallback(
     (map: google.maps.Map) => {
@@ -86,7 +119,7 @@ export function AttractionMap({
       for (const a of mappable) {
         bounds.extend({ lat: a.lat, lng: a.lng });
       }
-      map.fitBounds(bounds, { top: 48, right: 48, bottom: 48, left: 48 });
+      map.fitBounds(bounds, { top: 56, right: 56, bottom: 56, left: 56 });
       const listener = google.maps.event.addListenerOnce(map, "bounds_changed", () => {
         const zoom = map.getZoom();
         if (zoom != null && zoom > 14) map.setZoom(14);
@@ -98,6 +131,7 @@ export function AttractionMap({
 
   const syncMarkers = useCallback(
     (map: google.maps.Map) => {
+      const gen = ++iconGenRef.current;
       const nextIds = new Set(mappable.map((a) => a.id));
       const existing = markersByIdRef.current;
 
@@ -110,18 +144,22 @@ export function AttractionMap({
 
       for (const a of mappable) {
         const selected = a.id === selectedIdRef.current;
+        const rank = rankById.get(a.id) ?? 0;
         let marker = existing.get(a.id);
 
         if (marker) {
           marker.setPosition({ lat: a.lat, lng: a.lng });
-          marker.setIcon(markerIcon(google, a, selected));
-          marker.setZIndex(selected ? 1000 : 1);
+          marker.setLabel(markerLabel(a.name, selected));
+          marker.setZIndex(selected ? 1000 : rank);
+          marker.setTitle(a.name);
+          void applyMarkerIcon(marker, a, rank, selected, gen);
         } else {
           marker = new google.maps.Marker({
             map,
             position: { lat: a.lat, lng: a.lng },
-            icon: markerIcon(google, a, selected),
-            zIndex: selected ? 1000 : 1,
+            icon: toGoogleMarkerIcon(google, getPinMarkerDataUrlSync(rank, selected), selected),
+            label: markerLabel(a.name, selected),
+            zIndex: selected ? 1000 : rank,
             title: a.name,
           });
 
@@ -130,10 +168,11 @@ export function AttractionMap({
           });
 
           existing.set(a.id, marker);
+          void applyMarkerIcon(marker, a, rank, selected, gen);
         }
       }
     },
-    [mappable],
+    [mappable, rankById, applyMarkerIcon],
   );
 
   useEffect(() => {
@@ -225,11 +264,16 @@ export function AttractionMap({
 
   return (
     <div
-      className={`attraction-map-root relative overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 ${className}`}
+      className={`attraction-map-root relative isolate z-0 overflow-hidden rounded-2xl border border-slate-200 bg-slate-100 ${className} ${mapReady ? "" : "pointer-events-none"}`}
     >
       <div ref={containerRef} className="z-0 h-full min-h-[280px] w-full sm:min-h-[360px]" />
+      {!mapReady && !loadError ? (
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-slate-50/90 text-sm text-slate-500">
+          지도 불러오는 중…
+        </div>
+      ) : null}
       {loadError ? (
-        <div className="absolute inset-0 z-10 flex items-center justify-center bg-white/90 px-4 text-center text-sm text-slate-600">
+        <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-white/90 px-4 text-center text-sm text-slate-600">
           {loadError}
         </div>
       ) : null}
@@ -239,7 +283,7 @@ export function AttractionMap({
         </div>
       ) : !loadError ? (
         <p className="pointer-events-none absolute bottom-2 left-2 z-10 rounded-md bg-white/90 px-2 py-1 text-[10px] text-slate-600 shadow-sm">
-          {mappable.length}곳 · 사진을 눌러 상세 보기 · Google Maps
+          {mappable.length}곳 · 핀을 눌러 상세 보기
         </p>
       ) : null}
     </div>

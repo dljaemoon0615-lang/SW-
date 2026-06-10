@@ -195,7 +195,10 @@ export async function searchNearbyPlaces(options: {
   includedTypes: string[];
   maxResultCount?: number;
   languageCode?: string;
+  /** false면 사진 URL 해석 생략 (supplemental 빠른 로드용) */
+  resolvePhotos?: boolean;
 }): Promise<GooglePlaceSummary[]> {
+  const resolvePhotos = options.resolvePhotos ?? true;
   const json = await request<{ places?: ApiPlace[] }>("/places:searchNearby", {
     method: "POST",
     fieldMask:
@@ -217,7 +220,7 @@ export async function searchNearbyPlaces(options: {
 
   const out: GooglePlaceSummary[] = [];
   for (const place of json.places) {
-    const imageUrl = await firstPhotoUrl(place);
+    const imageUrl = resolvePhotos ? await firstPhotoUrl(place) : undefined;
     const summary = mapSummary(place, imageUrl);
     if (summary) out.push(summary);
   }

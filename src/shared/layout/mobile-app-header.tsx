@@ -4,6 +4,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { useSession } from "next-auth/react";
 import { BrandMark } from "@/shared/ui/brand-logo";
+import { ViewModeSwitcher } from "@/shared/ui/view-mode-switcher";
 import { APP_TAGLINE } from "@/shared/lib/constants";
 
 function displayName(name?: string | null, email?: string | null) {
@@ -30,10 +31,13 @@ export function MobileAppHeader({
     >
       <div className="mobile-app-header__left">
         {showLogo ? (
-          <Link href="/" className="mobile-app-header__brand" aria-label="홈">
-            <BrandMark size={32} />
-            <span className="mobile-app-header__tagline">{APP_TAGLINE}</span>
-          </Link>
+          <div className="mobile-app-header__brand-stack">
+            <Link href="/" className="mobile-app-header__brand" aria-label="홈">
+              <BrandMark size={32} />
+              <span className="mobile-app-header__tagline">{APP_TAGLINE}</span>
+            </Link>
+            <ViewModeSwitcher compact className="mt-1" />
+          </div>
         ) : (
           <span className="mobile-app-header__title">{title}</span>
         )}

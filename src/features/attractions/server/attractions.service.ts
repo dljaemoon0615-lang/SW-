@@ -4,9 +4,17 @@ import {
   type OverpassPlace,
   type WikiDetail,
 } from "@/server/attractions/travel-client";
+import {
+  CURATED_ATTRACTIONS_PER_REGION,
+  getCuratedAttractionsForRegion,
+} from "@/features/attractions/data/curated-attractions";
 import { enrichAttractionsWithRatings } from "@/features/attractions/data/attraction-ratings";
 import { sortAttractionsByRating } from "@/features/attractions/lib/sort-attractions";
-import { searchGoogleAttractions, applyGoogleRatingsFromPlaces } from "@/server/google-places/attractions";
+import {
+  searchGoogleSupplementalAttractions,
+  applyGoogleRatingsFromPlaces,
+} from "@/server/google-places/attractions";
+import { enrichCuratedAttractionsWithGoogle } from "@/server/google-places/enrich-curated";
 import { hasGooglePlacesKey } from "@/server/google-places/client";
 import {
   getFamousLandmarksForRegion,
@@ -17,9 +25,25 @@ import type { AttractionResult } from "@/server/ai/types";
 import { applyFromMap, buildKoTranslationMap } from "@/server/translate/ko-map";
 import { categoryLabelKo } from "@/server/translate/category-labels";
 import { formatOpeningHours } from "@/server/translate/format-opening-hours";
+import { MIN_ATTRACTIONS_PER_REGION } from "@/features/attractions/lib/catalog-ready";
 import type { JapanRegionId } from "@/shared/lib/constants";
 
-const CACHE_VERSION = 10;
+const CACHE_VERSION = 22;
+const OVERPASS_SUPPLEMENTAL_TIMEOUT_MS = 35_000;
+
+export const ATTRACTIONS_PAGE_SIZE = CURATED_ATTRACTIONS_PER_REGION;
+
+export type AttractionsPageResult = {
+  items: AttractionResult[];
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  isCuratedPage: boolean;
+};
+
+type CacheEntry = { expires: number; data: AttractionResult[]; version: number };
+const curatedCache = new Map<JapanRegionId, CacheEntry>();
+const supplementalCache = new Map<JapanRegionId, CacheEntry>();
 
 type RegionSpot = { lat: number; lon: number; radius: number };
 
@@ -29,12 +53,18 @@ type RegionSpot = { lat: number; lon: number; radius: number };
  * 그래서 도시별로 1~2 거점에 충분히 큰 반경을 쓰고, 결과는 메모리 캐시합니다.
  */
 const REGION_SPOTS: Record<JapanRegionId, RegionSpot[]> = {
-  TOKYO: [{ lat: 35.6812, lon: 139.7671, radius: 8000 }],
+  TOKYO: [
+    { lat: 35.6812, lon: 139.7671, radius: 8000 },
+    { lat: 35.6896, lon: 139.6917, radius: 8000 },
+  ],
   OSAKA_KYOTO: [
     { lat: 34.6937, lon: 135.5023, radius: 8000 }, // 오사카 중심
     { lat: 35.0116, lon: 135.7681, radius: 8000 }, // 교토 중심
   ],
-  FUKUOKA: [{ lat: 33.5902, lon: 130.4017, radius: 9000 }],
+  FUKUOKA: [
+    { lat: 33.5902, lon: 130.4017, radius: 9000 },
+    { lat: 33.5212, lon: 130.5349, radius: 8000 },
+  ],
   SAPPORO: [{ lat: 43.0686, lon: 141.3508, radius: 10000 }],
 };
 
@@ -42,7 +72,6 @@ const CACHE_TTL_MS = 60 * 60 * 1000;
 /** 한 지역에서 카드로 보일 최대 개수 (대표 명소 + Overpass 보충) */
 const MAX_RESULTS_PER_REGION = 50;
 const MAX_OVERPASS_POOL = 70;
-type CacheEntry = { expires: number; data: AttractionResult[]; version: number };
 const memoryCache = new Map<JapanRegionId, CacheEntry>();
 
 function isCuratedId(id: string) {
@@ -245,6 +274,90 @@ async function fetchFromGoogle(region: JapanRegionId): Promise<AttractionResult[
   return sortAttractionsByRating(translated);
 }
 
+function isNearAttraction(a: AttractionResult, b: AttractionResult, delta = 0.006): boolean {
+  return Math.abs(a.lat - b.lat) < delta && Math.abs(a.lng - b.lng) < delta;
+}
+
+function isSameAttractionName(a: AttractionResult, b: AttractionResult): boolean {
+  const ak = (a.nameKo ?? a.name).toLowerCase();
+  const bk = (b.nameKo ?? b.name).toLowerCase();
+  return ak === bk || ak.includes(bk) || bk.includes(ak);
+}
+
+/** Google 실평점·사진을 우선하고, OSM·대표 명소로 목록을 보강 */
+function mergeAttractionResults(
+  preferred: AttractionResult[],
+  extra: AttractionResult[],
+): AttractionResult[] {
+  const out: AttractionResult[] = [...preferred];
+
+  for (const item of extra) {
+    if (out.some((ex) => ex.id === item.id)) continue;
+    if (out.some((ex) => isNearAttraction(ex, item) || isSameAttractionName(ex, item))) continue;
+    out.push(item);
+  }
+
+  return sortAttractionsByRating(out);
+}
+
+async function fetchFromOverpassPipeline(
+  region: JapanRegionId,
+  options?: { enrichWithGoogleRatings?: boolean },
+): Promise<AttractionResult[]> {
+  const enrichWithGoogleRatings = options?.enrichWithGoogleRatings ?? true;
+  const spots = REGION_SPOTS[region];
+  if (!spots?.length) return [];
+
+  const curatedPlaces = getFamousLandmarksForRegion(region).map(landmarkToOverpassPlace);
+
+  const lists = await Promise.all(
+    spots.map((spot) => fetchAttractions(spot.lat, spot.lon, spot.radius, MAX_OVERPASS_POOL)),
+  );
+  const overpassPlaces = dedupe(lists.flat());
+  const mergedPlaces = mergePlaces(curatedPlaces, overpassPlaces).sort(rankPlaceForEnrichment);
+  if (mergedPlaces.length === 0) return [];
+
+  const candidates = mergedPlaces.slice(0, MAX_RESULTS_PER_REGION + curatedPlaces.length);
+  const detailMap = await fetchWikiDetailsBatch(candidates);
+
+  const items: AttractionResult[] = [];
+  for (const place of candidates) {
+    const detail = detailMap.get(place.id);
+    const fallback = getLandmarkFallbackDescription(place.id);
+    const title = place.nameKo ?? place.nameJa ?? place.name;
+    if (!title.trim()) continue;
+
+    if (detail?.description) {
+      items.push(toResult(place, detail));
+    } else if (fallback) {
+      items.push(
+        toResult(place, {
+          title,
+          description: fallback,
+          lang: "ko",
+        }),
+      );
+    } else {
+      const label = categoryLabelKo(place.category ?? "attraction");
+      items.push(
+        toResult(place, {
+          title,
+          description: place.nameKo ? `${title} — ${label} 관광지입니다.` : `${title} (${label})`,
+          lang: place.nameKo ? "ko" : "ja",
+        }),
+      );
+    }
+  }
+
+  const translated = await applyKoTranslations(items);
+  const withRatings = enrichAttractionsWithRatings(translated);
+  const withGoogleRatings = enrichWithGoogleRatings
+    ? await applyGoogleRatingsFromPlaces(region, withRatings)
+    : withRatings;
+
+  return sortAttractionsByRating(withGoogleRatings);
+}
+
 /**
  * 카테고리 우선순위 — 박물관·테마파크·역사 사적 같은 "확실한 관광지"를 앞에 두어
  * Wikipedia 배치 상한(50개)에 잘려도 핵심이 빠지지 않도록 정렬합니다.
@@ -278,81 +391,157 @@ function rankPlaceForEnrichment(a: OverpassPlace, b: OverpassPlace): number {
   return wa - wb;
 }
 
-/**
- * 지정 지역의 관광지를 가져옵니다.
- * - GOOGLE_PLACES_API_KEY 있으면 Google Places nearby 검색 (맛집과 동일)
- * - 없거나 실패 시 Overpass(OSM) + Wikipedia 폴백
- */
-export async function getAttractionsByRegion(
+function excludeCuratedDuplicates(
+  curated: AttractionResult[],
+  pool: AttractionResult[],
+): AttractionResult[] {
+  const out: AttractionResult[] = [];
+  for (const item of pool) {
+    if (curated.some((c) => c.id === item.id)) continue;
+    if (curated.some((c) => isNearAttraction(c, item) || isSameAttractionName(c, item))) continue;
+    out.push(item);
+  }
+  return sortAttractionsByRating(out);
+}
+
+function totalPagesFor(supplementalCount: number): number {
+  const extraPages = supplementalCount > 0 ? Math.ceil(supplementalCount / ATTRACTIONS_PAGE_SIZE) : 0;
+  return 1 + extraPages;
+}
+
+/** 1페이지: 큐레이션 15곳 (+ Google 사진·평점) */
+export async function getCuratedPageAttractions(
   region: JapanRegionId,
 ): Promise<AttractionResult[]> {
   const now = Date.now();
-  const cached = memoryCache.get(region);
+  const cached = curatedCache.get(region);
   if (
     cached &&
     cached.version === CACHE_VERSION &&
     cached.expires > now &&
-    cached.data.length > 0
+    cached.data.length >= MIN_ATTRACTIONS_PER_REGION
   ) {
     return cached.data;
   }
 
+  let results = getCuratedAttractionsForRegion(region);
   if (hasGooglePlacesKey()) {
-    const fromGoogle = await fetchFromGoogle(region);
-    if (fromGoogle?.length) {
-      memoryCache.set(region, {
-        expires: now + CACHE_TTL_MS,
-        data: fromGoogle,
-        version: CACHE_VERSION,
-      });
-      return fromGoogle;
-    }
+    results = await enrichCuratedAttractionsWithGoogle(region, results);
   }
 
-  const spots = REGION_SPOTS[region];
-  if (!spots?.length) return [];
-
-  const curatedPlaces = getFamousLandmarksForRegion(region).map(landmarkToOverpassPlace);
-
-  const lists = await Promise.all(
-    spots.map((spot) => fetchAttractions(spot.lat, spot.lon, spot.radius, MAX_OVERPASS_POOL)),
-  );
-  const overpassPlaces = dedupe(lists.flat());
-  const mergedPlaces = mergePlaces(curatedPlaces, overpassPlaces).sort(rankPlaceForEnrichment);
-  if (mergedPlaces.length === 0) return [];
-
-  const candidates = mergedPlaces.slice(0, MAX_RESULTS_PER_REGION + curatedPlaces.length);
-  const detailMap = await fetchWikiDetailsBatch(candidates);
-
-  const items: AttractionResult[] = [];
-  for (const place of candidates) {
-    const detail = detailMap.get(place.id);
-    const fallback = getLandmarkFallbackDescription(place.id);
-    if (detail?.description) {
-      items.push(toResult(place, detail));
-    } else if (fallback) {
-      items.push(
-        toResult(place, {
-          title: place.nameKo ?? place.nameJa ?? place.name,
-          description: fallback,
-          lang: "ko",
-        }),
-      );
-    }
-  }
-  const translated = await applyKoTranslations(items);
-  const withRatings = enrichAttractionsWithRatings(translated);
-  const withGoogleRatings = await applyGoogleRatingsFromPlaces(region, withRatings);
-  const sorted = sortAttractionsByRating(withGoogleRatings);
-
-  if (sorted.length >= 5) {
-    memoryCache.set(region, {
+  if (results.length >= MIN_ATTRACTIONS_PER_REGION) {
+    curatedCache.set(region, {
       expires: now + CACHE_TTL_MS,
-      data: sorted,
+      data: results,
       version: CACHE_VERSION,
     });
   }
-  return sorted;
+
+  return results;
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => {
+      setTimeout(() => resolve(fallback), ms);
+    }),
+  ]);
+}
+
+/** 2페이지 이후: Google·OSM 추가 관광지 풀 (큐레이션 제외) */
+export async function getSupplementalAttractionsPool(
+  region: JapanRegionId,
+): Promise<AttractionResult[]> {
+  const now = Date.now();
+  const cached = supplementalCache.get(region);
+  if (cached && cached.version === CACHE_VERSION && cached.expires > now) {
+    return cached.data;
+  }
+
+  const curated = getCuratedAttractionsForRegion(region);
+  let pool: AttractionResult[] = [];
+
+  if (hasGooglePlacesKey()) {
+    pool = (await searchGoogleSupplementalAttractions(region).catch(() => null)) ?? [];
+  } else {
+    pool = await withTimeout(
+      fetchFromOverpassPipeline(region),
+      OVERPASS_SUPPLEMENTAL_TIMEOUT_MS,
+      [] as AttractionResult[],
+    );
+  }
+
+  const supplemental = excludeCuratedDuplicates(curated, pool).slice(0, MAX_RESULTS_PER_REGION);
+
+  supplementalCache.set(region, {
+    expires: now + CACHE_TTL_MS,
+    data: supplemental,
+    version: CACHE_VERSION,
+  });
+
+  return supplemental;
+}
+
+function supplementalCountFromCache(region: JapanRegionId): number {
+  const now = Date.now();
+  const cached = supplementalCache.get(region);
+  if (cached && cached.version === CACHE_VERSION && cached.expires > now) {
+    return cached.data.length;
+  }
+  return 0;
+}
+
+/** 페이지별 관광지 (1=큐레이션, 2+=추가 목록) */
+export async function getAttractionsPage(
+  region: JapanRegionId,
+  page: number,
+): Promise<AttractionsPageResult> {
+  const safePage = Math.max(1, Math.floor(page));
+
+  if (safePage <= 1) {
+    const items = await getCuratedPageAttractions(region);
+    const totalPages = Math.max(1, totalPagesFor(supplementalCountFromCache(region)));
+    return {
+      items,
+      page: 1,
+      pageSize: ATTRACTIONS_PAGE_SIZE,
+      totalPages,
+      isCuratedPage: true,
+    };
+  }
+
+  const supplemental = await getSupplementalAttractionsPool(region).catch(
+    () => [] as AttractionResult[],
+  );
+  const totalPages = totalPagesFor(supplemental.length);
+  const clampedPage = Math.min(safePage, Math.max(1, totalPages));
+  const sliceIndex = clampedPage - 2;
+  const items = supplemental.slice(
+    sliceIndex * ATTRACTIONS_PAGE_SIZE,
+    (sliceIndex + 1) * ATTRACTIONS_PAGE_SIZE,
+  );
+
+  return {
+    items,
+    page: clampedPage,
+    pageSize: ATTRACTIONS_PAGE_SIZE,
+    totalPages,
+    isCuratedPage: false,
+  };
+}
+
+/** @deprecated 1페이지 큐레이션만 — catalog 호환 */
+export async function getAttractionsByRegion(
+  region: JapanRegionId,
+): Promise<AttractionResult[]> {
+  const page = await getAttractionsPage(region, 1);
+  memoryCache.set(region, {
+    expires: Date.now() + CACHE_TTL_MS,
+    data: page.items,
+    version: CACHE_VERSION,
+  });
+  return page.items;
 }
 
 /** 기존 호출처 호환용 별칭 */

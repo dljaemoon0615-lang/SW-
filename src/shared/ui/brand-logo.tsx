@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useId } from "react";
 import { APP_NAME, APP_TAGLINE } from "@/shared/lib/constants";
 import { BrandHandsGraphic } from "@/shared/ui/brand-hands-icon";
+import { ViewModeSwitcher } from "@/shared/ui/view-mode-switcher";
 
 type Variant = "header" | "hero" | "compact" | "footer";
 
@@ -11,6 +12,8 @@ type Props = {
   variant?: Variant;
   href?: string;
   className?: string;
+  /** 헤더에서 앱/웹 보기 전환 */
+  showViewSwitcher?: boolean;
 };
 
 export function BrandMark({ size }: { size: number }) {
@@ -31,7 +34,12 @@ export function BrandMark({ size }: { size: number }) {
   );
 }
 
-export function BrandLogo({ variant = "header", href = "/", className = "" }: Props) {
+export function BrandLogo({
+  variant = "header",
+  href = "/",
+  className = "",
+  showViewSwitcher = false,
+}: Props) {
   const isHero = variant === "hero";
   const isCompact = variant === "compact";
   const isFooter = variant === "footer";
@@ -70,13 +78,23 @@ export function BrandLogo({ variant = "header", href = "/", className = "" }: Pr
     </div>
   );
 
-  if (href && !isFooter) {
-    return (
+  const brandBlock =
+    href && !isFooter ? (
       <Link href={href} className="transition-opacity hover:opacity-90">
         {content}
       </Link>
+    ) : (
+      content
+    );
+
+  if (showViewSwitcher && variant === "header") {
+    return (
+      <div className={`brand-logo-stack ${className}`}>
+        {brandBlock}
+        <ViewModeSwitcher className="mt-1.5" />
+      </div>
     );
   }
 
-  return content;
+  return brandBlock;
 }

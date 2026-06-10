@@ -1,10 +1,17 @@
 "use client";
 
 import type { ViewMode } from "@/shared/lib/view-mode";
-import { useViewModeContext } from "@/shared/providers/view-mode-provider";
+import {
+  useViewModeActions as useViewModeActionsInternal,
+  useViewModeContext,
+} from "@/shared/providers/view-mode-provider";
 
 export function useViewMode(): ViewMode {
   return useViewModeContext();
+}
+
+export function useViewModeActions() {
+  return useViewModeActionsInternal();
 }
 
 /** 추후 모바일 전용 주소용 링크 prefix */

@@ -1,5 +1,6 @@
+import { getCuratedAttractionsForRegion } from "@/features/attractions/data/curated-attractions";
+import { MIN_ATTRACTIONS_PER_REGION } from "@/features/attractions/lib/catalog-ready";
 import { getAttractionsByRegion } from "@/features/attractions/server/attractions.service";
-import { MOCK_ATTRACTIONS } from "@/features/attractions/server/mock-data";
 import { enrichAttractionsWithRatings } from "@/features/attractions/data/attraction-ratings";
 import { sortAttractionsByRating } from "@/features/attractions/lib/sort-attractions";
 import {
@@ -71,7 +72,7 @@ function restaurantRequestFor(region: JapanRegionId): RestaurantSearchRequest {
 }
 
 function hasLoadedAttractions(region: JapanRegionId): boolean {
-  return (state.attractions[region]?.length ?? 0) > 0;
+  return (state.attractions[region]?.length ?? 0) >= MIN_ATTRACTIONS_PER_REGION;
 }
 
 function hasLoadedStays(region: JapanRegionId): boolean {
@@ -105,9 +106,10 @@ async function loadAttractionsForRegion(region: JapanRegionId): Promise<void> {
 
   const promise = (async () => {
     const data = await getAttractionsByRegion(region).catch(
-      () => MOCK_ATTRACTIONS[region] ?? [],
+      () => getCuratedAttractionsForRegion(region),
     );
-    state.attractions[region] = data.length > 0 ? data : (MOCK_ATTRACTIONS[region] ?? []);
+    state.attractions[region] =
+      data.length > 0 ? data : getCuratedAttractionsForRegion(region);
   })();
 
   attractionsLoading.set(region, promise);
@@ -202,7 +204,7 @@ export async function ensureRegionAttractions(
   region: JapanRegionId,
 ): Promise<AttractionResult[]> {
   await loadAttractionsForRegion(region);
-  return state.attractions[region] ?? MOCK_ATTRACTIONS[region] ?? [];
+  return state.attractions[region] ?? getCuratedAttractionsForRegion(region);
 }
 
 /** 관광지 카탈로그 — 캐시 없으면 즉시 mock으로 채워 페이지를 막지 않음 */
@@ -288,7 +290,7 @@ export function getAttractionsCatalog(): Record<JapanRegionId, AttractionResult[
   const out = {} as Record<JapanRegionId, AttractionResult[]>;
   for (const id of REGION_IDS) {
     const cached = state.attractions[id];
-    const items = cached?.length ? cached : (MOCK_ATTRACTIONS[id] ?? []);
+    const items = cached?.length ? cached : getCuratedAttractionsForRegion(id);
     out[id] = sortAttractionsByRating(enrichAttractionsWithRatings(items));
   }
   return out;
@@ -297,8 +299,8 @@ export function getAttractionsCatalog(): Record<JapanRegionId, AttractionResult[
 export function getAttractionsForRegion(region: JapanRegionId): AttractionResult[] | undefined {
   const cached = state.attractions[region];
   if (cached?.length) return sortAttractionsByRating(cached);
-  const mock = MOCK_ATTRACTIONS[region];
-  return mock?.length ? sortAttractionsByRating(mock) : undefined;
+  const fallback = getCuratedAttractionsForRegion(region);
+  return fallback.length ? sortAttractionsByRating(fallback) : undefined;
 }
 
 export function getStaysCatalog(): Record<JapanRegionId, StaySearchResponse> {

@@ -23,7 +23,6 @@ export const BUDGET_CATEGORIES = [
 export const FEATURES = [
   { href: "/checklist", title: "여행 체크리스트", desc: "한국→일본 출발 전 준비물" },
   { href: "/chat", title: "AI 여행 상담", desc: "자연어 챗봇 · 대화 이력 유지" },
-  { href: "/planner", title: "일정 자동 생성", desc: "조건별 일정 · 드래그 앤 드롭" },
   { href: "/trips", title: "일정 저장·공유", desc: "마이페이지 · 동행자 편집" },
   { href: "/budget", title: "예산 관리", desc: "배분 제안 · 환율 반영" },
   { href: "/restaurants", title: "맛집 추천", desc: "필터 · 영업시간 표시" },

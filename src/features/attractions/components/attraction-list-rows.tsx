@@ -17,9 +17,15 @@ type Props = {
   items: AttractionResult[];
   selectedId: string | null;
   onSelect: (attraction: AttractionResult) => void;
+  rankOffset?: number;
 };
 
-export function AttractionListRows({ items, selectedId, onSelect }: Props) {
+export function AttractionListRows({
+  items,
+  selectedId,
+  onSelect,
+  rankOffset = 0,
+}: Props) {
   if (items.length === 0) {
     return <p className="py-8 text-center text-sm text-slate-500">표시할 관광지가 없습니다.</p>;
   }
@@ -39,7 +45,7 @@ export function AttractionListRows({ items, selectedId, onSelect }: Props) {
               }`}
             >
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[11px] font-bold text-white">
-                {index + 1}
+                {rankOffset + index + 1}
               </span>
               {thumb ? (
                 <span className="relative h-14 w-14 shrink-0 overflow-hidden rounded-lg bg-slate-100">

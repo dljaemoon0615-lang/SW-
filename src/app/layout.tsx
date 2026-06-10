@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Montserrat, Noto_Sans_KR } from "next/font/google";
 import "./globals.css";
+import { auth } from "@/auth";
 import { Providers } from "@/shared/providers";
 import { getViewMode } from "@/shared/lib/view-mode-server";
 import { APP_DESCRIPTION, APP_NAME, APP_TAGLINE } from "@/shared/lib/constants";
@@ -34,7 +35,7 @@ export const viewport: Viewport = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const viewMode = await getViewMode();
+  const [viewMode, session] = await Promise.all([getViewMode(), auth()]);
 
   return (
     <html
@@ -43,7 +44,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       className={`${notoSans.variable} ${montserrat.variable} h-full`}
     >
       <body className="min-h-full antialiased">
-        <Providers viewMode={viewMode}>{children}</Providers>
+        <Providers viewMode={viewMode} session={session}>
+          {children}
+        </Providers>
       </body>
     </html>
   );

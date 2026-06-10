@@ -22,7 +22,10 @@
  *   - 동일 청크 호출이라도 동시 호출 수는 자연스럽게 3~6회 수준으로 제한됩니다.
  */
 
-const OVERPASS_ENDPOINT = "https://overpass-api.de/api/interpreter";
+const OVERPASS_ENDPOINTS = [
+  "https://overpass-api.de/api/interpreter",
+  "https://overpass.kumi.systems/api/interpreter",
+];
 
 const USER_AGENT =
   "MY-TRIP-Planner/0.1 (educational; +https://github.com/dljaemoon0615-lang/SW-)";
@@ -136,54 +139,58 @@ export async function fetchAttractions(
 );
 out center ${limit};`;
 
-  try {
-    const res = await fetch(OVERPASS_ENDPOINT, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": USER_AGENT,
-      },
-      body: `data=${encodeURIComponent(query)}`,
-      next: { revalidate: 3600 },
-    });
-    if (!res.ok) return [];
-
-    const json = (await res.json()) as OverpassResponse;
-    const elements = json.elements ?? [];
-
-    const seenId = new Set<string>();
-    const seenName = new Set<string>();
-    const out: OverpassPlace[] = [];
-    for (const el of elements) {
-      const named = pickName(el.tags);
-      if (!named) continue;
-      const elLat = el.lat ?? el.center?.lat;
-      const elLng = el.lon ?? el.center?.lon;
-      if (elLat === undefined || elLng === undefined) continue;
-
-      const id = `osm-${el.type}-${el.id}`;
-      if (seenId.has(id)) continue;
-      if (seenName.has(named.name)) continue;
-      seenId.add(id);
-      seenName.add(named.name);
-
-      const tags = el.tags ?? {};
-      out.push({
-        id,
-        name: named.name,
-        nameKo: named.nameKo,
-        nameJa: named.nameJa,
-        lat: elLat,
-        lng: elLng,
-        category: deriveCategory(tags),
-        wikipediaTag: tags.wikipedia,
-        wikidataId: tags.wikidata,
+  for (const endpoint of OVERPASS_ENDPOINTS) {
+    try {
+      const res = await fetch(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+          "User-Agent": USER_AGENT,
+        },
+        body: `data=${encodeURIComponent(query)}`,
+        next: { revalidate: 3600 },
       });
+      if (res.status === 429 || !res.ok) continue;
+
+      const json = (await res.json()) as OverpassResponse;
+      const elements = json.elements ?? [];
+
+      const seenId = new Set<string>();
+      const seenName = new Set<string>();
+      const out: OverpassPlace[] = [];
+      for (const el of elements) {
+        const named = pickName(el.tags);
+        if (!named) continue;
+        const elLat = el.lat ?? el.center?.lat;
+        const elLng = el.lon ?? el.center?.lon;
+        if (elLat === undefined || elLng === undefined) continue;
+
+        const id = `osm-${el.type}-${el.id}`;
+        if (seenId.has(id)) continue;
+        if (seenName.has(named.name)) continue;
+        seenId.add(id);
+        seenName.add(named.name);
+
+        const tags = el.tags ?? {};
+        out.push({
+          id,
+          name: named.name,
+          nameKo: named.nameKo,
+          nameJa: named.nameJa,
+          lat: elLat,
+          lng: elLng,
+          category: deriveCategory(tags),
+          wikipediaTag: tags.wikipedia,
+          wikidataId: tags.wikidata,
+        });
+      }
+      if (out.length > 0) return out;
+    } catch {
+      /* 다음 엔드포인트 시도 */
     }
-    return out;
-  } catch {
-    return [];
   }
+
+  return [];
 }
 
 /* --------------------------------------------------------------------------

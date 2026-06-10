@@ -8,7 +8,7 @@ export const SHORTCUT_GROUPS = [
   {
     label: "일정 · AI",
     items: FEATURES.filter((f) =>
-      ["/planner", "/trips", "/chat"].includes(f.href),
+      ["/trips", "/chat"].includes(f.href),
     ),
   },
   {

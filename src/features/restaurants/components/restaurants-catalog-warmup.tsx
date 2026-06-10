@@ -15,11 +15,11 @@ export function RestaurantsCatalogWarmup() {
     };
 
     if (typeof requestIdleCallback === "function") {
-      const idleId = requestIdleCallback(run, { timeout: 4000 });
+      const idleId = requestIdleCallback(run, { timeout: 12_000 });
       return () => cancelIdleCallback(idleId);
     }
 
-    const timer = window.setTimeout(run, 500);
+    const timer = window.setTimeout(run, 8_000);
     return () => window.clearTimeout(timer);
   }, []);
 

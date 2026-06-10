@@ -83,57 +83,52 @@ function AttractionDetailModalBody({
       >
         <div className="relative shrink-0 md:flex md:min-h-0 md:w-[min(46%,400px)] md:flex-col md:self-stretch">
           {photos.length > 0 ? (
-            <button
-              type="button"
-              onClick={() => setLightbox(true)}
-              className="relative block aspect-[4/3] w-full cursor-zoom-in bg-slate-100 md:aspect-auto md:min-h-[280px] md:flex-1"
-              aria-label="사진 크게 보기"
-            >
-              <Image
-                src={photos[photoIndex]}
-                alt={attraction.name}
-                fill
-                className="object-cover object-center"
-                sizes="(max-width: 768px) 100vw, 672px"
-                priority
-                unoptimized
-              />
-              <span className="absolute bottom-3 right-3 rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
-                탭하여 확대
-              </span>
+            <div className="relative aspect-[4/3] w-full bg-slate-100 md:aspect-auto md:min-h-[280px] md:flex-1">
+              <button
+                type="button"
+                onClick={() => setLightbox(true)}
+                className="relative block h-full min-h-[inherit] w-full cursor-zoom-in"
+                aria-label="사진 크게 보기"
+              >
+                <Image
+                  src={photos[photoIndex]}
+                  alt={attraction.name}
+                  fill
+                  className="object-cover object-center"
+                  sizes="(max-width: 768px) 100vw, 672px"
+                  priority
+                  unoptimized
+                />
+                <span className="pointer-events-none absolute bottom-3 right-3 rounded-full bg-black/50 px-2 py-0.5 text-[10px] text-white backdrop-blur-sm">
+                  탭하여 확대
+                </span>
+              </button>
               {photos.length > 1 ? (
                 <>
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPhotoIndex((i) => (i - 1 + photos.length) % photos.length);
-                    }}
-                    className="absolute left-2 top-1/2 -translate-y-1/2 rounded-full bg-black/40 px-2.5 py-1 text-lg text-white backdrop-blur-sm hover:bg-black/55"
+                    onClick={() =>
+                      setPhotoIndex((i) => (i - 1 + photos.length) % photos.length)
+                    }
+                    className="absolute left-2 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 px-2.5 py-1 text-lg text-white backdrop-blur-sm hover:bg-black/55"
                     aria-label="이전 사진"
                   >
                     ‹
                   </button>
                   <button
                     type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPhotoIndex((i) => (i + 1) % photos.length);
-                    }}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full bg-black/40 px-2.5 py-1 text-lg text-white backdrop-blur-sm hover:bg-black/55"
+                    onClick={() => setPhotoIndex((i) => (i + 1) % photos.length)}
+                    className="absolute right-3 top-1/2 z-10 -translate-y-1/2 rounded-full bg-black/40 px-2.5 py-1 text-lg text-white backdrop-blur-sm hover:bg-black/55"
                     aria-label="다음 사진"
                   >
                     ›
                   </button>
-                  <div className="absolute bottom-10 left-1/2 flex -translate-x-1/2 gap-1.5">
+                  <div className="absolute bottom-10 left-1/2 z-10 flex -translate-x-1/2 gap-1.5">
                     {photos.map((_, i) => (
                       <button
                         key={i}
                         type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setPhotoIndex(i);
-                        }}
+                        onClick={() => setPhotoIndex(i)}
                         className={`h-1.5 rounded-full transition-all ${
                           i === photoIndex ? "w-5 bg-white" : "w-1.5 bg-white/50"
                         }`}
@@ -143,7 +138,7 @@ function AttractionDetailModalBody({
                   </div>
                 </>
               ) : null}
-            </button>
+            </div>
           ) : (
             <div className="flex aspect-[4/3] items-center justify-center bg-slate-100 text-slate-500 md:min-h-[280px] md:flex-1">
               사진 없음

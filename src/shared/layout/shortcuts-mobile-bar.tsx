@@ -4,7 +4,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Bell,
-  Calendar,
   FolderOpen,
   Hotel,
   ListChecks,
@@ -19,7 +18,6 @@ import { FEATURES } from "@/shared/lib/constants";
 const ICONS: Record<string, LucideIcon> = {
   "/checklist": ListChecks,
   "/chat": MessageCircle,
-  "/planner": Calendar,
   "/trips": FolderOpen,
   "/budget": Wallet,
   "/restaurants": Utensils,
@@ -31,7 +29,6 @@ const ICONS: Record<string, LucideIcon> = {
 const MOBILE_LABELS: Record<string, string> = {
   "/checklist": "체크",
   "/chat": "상담",
-  "/planner": "일정",
   "/trips": "내일정",
   "/budget": "예산",
   "/restaurants": "맛집",

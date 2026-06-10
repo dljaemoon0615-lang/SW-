@@ -76,7 +76,7 @@ export function SiteHeader({ tone = "default" }: { tone?: "default" | "sky" }) {
       } px-5 py-4 md:px-8`}
     >
       <div className="mx-auto flex max-w-[1200px] items-center justify-between gap-4">
-        <BrandLogo variant="header" />
+        <BrandLogo variant="header" showViewSwitcher />
 
         {!isMobile ? (
           <nav>

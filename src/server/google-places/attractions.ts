@@ -17,13 +17,33 @@ const REGION_CENTERS: Record<
   JapanRegionId,
   { lat: number; lng: number; radius: number }[]
 > = {
-  TOKYO: [{ lat: 35.6812, lng: 139.7671, radius: 8000 }],
+  TOKYO: [
+    { lat: 35.6812, lng: 139.7671, radius: 8000 },
+    { lat: 35.6896, lng: 139.6917, radius: 8000 },
+  ],
   OSAKA_KYOTO: [
     { lat: 34.6937, lng: 135.5023, radius: 8000 },
     { lat: 35.0116, lng: 135.7681, radius: 8000 },
   ],
-  FUKUOKA: [{ lat: 33.5902, lng: 130.4017, radius: 9000 }],
+  FUKUOKA: [
+    { lat: 33.5902, lng: 130.4017, radius: 9000 },
+    { lat: 33.5212, lng: 130.5349, radius: 8000 },
+  ],
   SAPPORO: [{ lat: 43.0686, lng: 141.3508, radius: 10000 }],
+};
+
+/** supplemental 전용 — 대표 명소와 겹치지 않는 주변 POI를 더 모으기 위한 추가 거점 */
+const SUPPLEMENTAL_EXTRA_CENTERS: Record<
+  JapanRegionId,
+  { lat: number; lng: number; radius: number }[]
+> = {
+  TOKYO: [{ lat: 35.7148, lng: 139.7967, radius: 9000 }],
+  OSAKA_KYOTO: [
+    { lat: 34.6851, lng: 135.8048, radius: 10000 },
+    { lat: 34.6901, lng: 135.1956, radius: 9000 },
+  ],
+  FUKUOKA: [{ lat: 33.2494, lng: 130.2998, radius: 10000 }],
+  SAPPORO: [{ lat: 42.9851, lng: 141.2672, radius: 10000 }],
 };
 
 const ATTRACTION_TYPES = [
@@ -317,4 +337,48 @@ export async function searchGoogleAttractions(
   const final = results.map((item) => byId.get(item.id) ?? item);
 
   return final.length > 0 ? sortAttractionsByRating(final) : null;
+}
+
+/**
+ * 2페이지용 빠른 Google 목록 — 랜드마크 text search·상세 API 없이 nearby만 병렬 호출
+ */
+export async function searchGoogleSupplementalAttractions(
+  region: JapanRegionId,
+): Promise<AttractionResult[] | null> {
+  if (!hasGooglePlacesKey()) return null;
+
+  const centers = [
+    ...(REGION_CENTERS[region] ?? []),
+    ...(SUPPLEMENTAL_EXTRA_CENTERS[region] ?? []),
+  ];
+  if (!centers.length) return null;
+
+  const lists = await Promise.all(
+    centers.map((center) =>
+      searchNearbyPlaces({
+        center: { latitude: center.lat, longitude: center.lng },
+        radiusMeters: center.radius,
+        includedTypes: ATTRACTION_TYPES,
+        maxResultCount: 20,
+        languageCode: "ko",
+        resolvePhotos: false,
+      }),
+    ),
+  );
+
+  const merged = new Map<string, AttractionResult>();
+  for (const list of lists) {
+    for (const place of list) {
+      if (merged.has(place.id)) continue;
+      if (!isAttractionPlace(place)) continue;
+      const duplicate = [...merged.values()].some((existing) =>
+        isNear(existing.lat, existing.lng, place.lat, place.lng),
+      );
+      if (duplicate) continue;
+      merged.set(place.id, toAttraction(place));
+    }
+  }
+
+  if (merged.size === 0) return null;
+  return sortAttractionsByRating([...merged.values()]);
 }

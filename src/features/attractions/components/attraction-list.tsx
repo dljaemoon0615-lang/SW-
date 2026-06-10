@@ -1,18 +1,44 @@
 "use client";
 
 import dynamic from "next/dynamic";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Badge } from "@/shared/ui/badge";
 import { JAPAN_REGIONS, type JapanRegionId } from "@/shared/lib/constants";
 import { enrichAttractionsWithRatings } from "@/features/attractions/data/attraction-ratings";
+import { CURATED_ATTRACTIONS_PER_REGION } from "@/features/attractions/data/curated-attractions";
 import { isAttractionCatalogStale } from "@/features/attractions/lib/catalog-ready";
+import {
+  markCuratedDone,
+  isSupplementalDone,
+  markSupplementalDone,
+  readRegionCatalogCache,
+  resetSupplementalFetch,
+  runCuratedFetch,
+  runSupplementalFetch,
+  shouldFetchCurated,
+  shouldFetchSupplemental,
+  patchRegionCatalogCache,
+  totalPagesForCatalog,
+  writeRegionCatalogCache,
+  type RegionCatalogState,
+} from "@/features/attractions/lib/attractions-client-catalog";
 import { sortAttractionsByRating } from "@/features/attractions/lib/sort-attractions";
 import type { AttractionResult } from "@/server/ai/types";
 import { AttractionDetailModal } from "@/features/attractions/components/attraction-detail-modal";
 import { AttractionListRows } from "@/features/attractions/components/attraction-list-rows";
-import { Clock, LayoutGrid, List, Map, Star, Ticket, Users } from "lucide-react";
+import {
+  ChevronLeft,
+  ChevronRight,
+  Clock,
+  LayoutGrid,
+  List,
+  Map,
+  Star,
+  Ticket,
+  Users,
+} from "lucide-react";
 
 const AttractionMap = dynamic(
   () =>
@@ -54,14 +80,85 @@ const CATEGORY_LABEL: Record<string, string> = {
   historic_tomb: "고분",
 };
 
-function prepareRegionCatalog(
+function initRegionCatalog(
   initial: Record<JapanRegionId, AttractionResult[]>,
-): Record<JapanRegionId, AttractionResult[]> {
-  const out = {} as Record<JapanRegionId, AttractionResult[]>;
+): Record<JapanRegionId, RegionCatalogState> {
+  const out = {} as Record<JapanRegionId, RegionCatalogState>;
   for (const r of JAPAN_REGIONS) {
-    out[r.id] = sortAttractionsByRating(enrichAttractionsWithRatings(initial[r.id] ?? []));
+    const cached = readRegionCatalogCache(r.id);
+    const curated = sortAttractionsByRating(
+      enrichAttractionsWithRatings(cached?.curated ?? initial[r.id] ?? []),
+    );
+    out[r.id] = {
+      curated,
+      supplemental: cached?.supplemental ?? [],
+    };
+    writeRegionCatalogCache(r.id, out[r.id]);
+    if (!isAttractionCatalogStale(curated)) markCuratedDone(r.id);
+    if (out[r.id].supplemental.length >= CURATED_ATTRACTIONS_PER_REGION) {
+      markSupplementalDone(r.id);
+    }
   }
   return out;
+}
+
+function AttractionPagination({
+  page,
+  totalPages,
+  onChange,
+}: {
+  page: number;
+  totalPages: number;
+  onChange: (page: number) => void;
+}) {
+  if (totalPages <= 1) return null;
+
+  const pages = Array.from({ length: totalPages }, (_, i) => i + 1);
+
+  return (
+    <nav
+      className="flex flex-wrap items-center justify-center gap-2 pt-2"
+      aria-label="관광지 페이지"
+    >
+      <button
+        type="button"
+        disabled={page <= 1}
+        onClick={() => onChange(page - 1)}
+        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+        aria-label="이전 페이지"
+      >
+        <ChevronLeft size={16} />
+        이전
+      </button>
+
+      {pages.map((p) => (
+        <button
+          key={p}
+          type="button"
+          onClick={() => onChange(p)}
+          className={`min-w-9 rounded-lg px-3 py-2 text-sm font-medium transition ${
+            p === page
+              ? "bg-brand text-white"
+              : "border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+          }`}
+          aria-current={p === page ? "page" : undefined}
+        >
+          {p}
+        </button>
+      ))}
+
+      <button
+        type="button"
+        disabled={page >= totalPages}
+        onClick={() => onChange(page + 1)}
+        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-700 transition hover:bg-slate-50 disabled:opacity-40"
+        aria-label="다음 페이지"
+      >
+        다음
+        <ChevronRight size={16} />
+      </button>
+    </nav>
+  );
 }
 
 function AttractionCard({
@@ -104,7 +201,6 @@ function AttractionCard({
               fill
               className="object-cover object-center transition duration-300 group-hover:scale-[1.02]"
               sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 33vw"
-              priority
               unoptimized
             />
           </div>
@@ -216,58 +312,213 @@ export function AttractionList({ initialByRegion }: AttractionListProps) {
       ? regionParam
       : "OSAKA_KYOTO";
 
-  const [byRegion, setByRegion] = useState(() => prepareRegionCatalog(initialByRegion));
+  const [catalog, setCatalog] = useState(() => initRegionCatalog(initialByRegion));
   const [pickedRegion, setPickedRegion] = useState<JapanRegionId>(initialRegion);
   const region = regionParam && JAPAN_REGIONS.some((r) => r.id === regionParam) ? regionParam : pickedRegion;
   const [selected, setSelected] = useState<AttractionResult | null>(null);
   const [view, setView] = useState<ViewMode>("split");
-  const [warming, setWarming] = useState(() =>
-    JAPAN_REGIONS.some((r) => isAttractionCatalogStale(initialByRegion[r.id] ?? [])),
+  const [page, setPage] = useState(1);
+  const [loadingCurated, setLoadingCurated] = useState<Set<JapanRegionId>>(() => new Set());
+  const [loadingSupplemental, setLoadingSupplemental] = useState<Set<JapanRegionId>>(
+    () => new Set(),
   );
+  const [supplementalFailed, setSupplementalFailed] = useState<Set<JapanRegionId>>(
+    () => new Set(),
+  );
+  const mountedRef = useRef(true);
 
   useEffect(() => {
-    let cancelled = false;
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
 
-    async function fetchRegion(target: JapanRegionId) {
-      const res = await fetch(`/api/ai/attractions?region=${target}&preload=1`, {
-        cache: "no-store",
-      });
-      const d = await res.json();
-      const next = (d.attractions ?? d.items) as AttractionResult[] | undefined;
-      if (!Array.isArray(next) || next.length === 0) return;
-      setByRegion((prev) => ({
+  const applyCatalogPatch = useCallback(
+    (target: JapanRegionId, patch: Partial<RegionCatalogState>) => {
+      patchRegionCatalogCache(target, patch);
+      if (!mountedRef.current) return;
+      setCatalog((prev) => ({
         ...prev,
-        [target]: sortAttractionsByRating(next),
+        [target]: { ...prev[target], ...patch },
       }));
+    },
+    [],
+  );
+
+  const fetchCuratedPage = useCallback(
+    (target: JapanRegionId, curated: AttractionResult[]) => {
+      if (!shouldFetchCurated(target, curated)) return Promise.resolve();
+
+      return runCuratedFetch(target, async () => {
+        setLoadingCurated((prev) => new Set(prev).add(target));
+        try {
+          const res = await fetch(
+            `/api/ai/attractions?region=${target}&page=1&preload=1`,
+            { cache: "no-store" },
+          );
+          const d = await res.json();
+          const next = (d.attractions ?? d.items) as AttractionResult[] | undefined;
+          if (!Array.isArray(next) || next.length === 0) return;
+          applyCatalogPatch(target, {
+            curated: sortAttractionsByRating(next),
+          });
+          markCuratedDone(target);
+        } catch {
+          /* ignore */
+        } finally {
+          if (mountedRef.current) {
+            setLoadingCurated((prev) => {
+              const next = new Set(prev);
+              next.delete(target);
+              return next;
+            });
+          }
+        }
+      });
+    },
+    [applyCatalogPatch],
+  );
+
+  const fetchSupplementalPool = useCallback(
+    (target: JapanRegionId) => {
+      if (!shouldFetchSupplemental(target)) return Promise.resolve();
+
+      return runSupplementalFetch(target, async () => {
+        setLoadingSupplemental((prev) => new Set(prev).add(target));
+        setSupplementalFailed((prev) => {
+          const next = new Set(prev);
+          next.delete(target);
+          return next;
+        });
+        try {
+          const res = await fetch(
+            `/api/ai/attractions?region=${target}&supplemental=1`,
+            { cache: "no-store", signal: AbortSignal.timeout(90_000) },
+          );
+          if (!res.ok) throw new Error(`supplemental ${res.status}`);
+          const d = await res.json();
+          const pool = (d.supplemental ?? d.items) as AttractionResult[] | undefined;
+          if (!Array.isArray(pool)) throw new Error("invalid supplemental payload");
+          applyCatalogPatch(target, {
+            supplemental: sortAttractionsByRating(pool),
+          });
+          markSupplementalDone(target);
+        } catch {
+          if (mountedRef.current) {
+            setSupplementalFailed((prev) => new Set(prev).add(target));
+          }
+        } finally {
+          if (mountedRef.current) {
+            setLoadingSupplemental((prev) => {
+              const next = new Set(prev);
+              next.delete(target);
+              return next;
+            });
+          }
+        }
+      });
+    },
+    [applyCatalogPatch],
+  );
+
+  const refreshRegion = useCallback(
+    (target: JapanRegionId, curated: AttractionResult[]) => {
+      void fetchCuratedPage(target, curated);
+      void fetchSupplementalPool(target);
+    },
+    [fetchCuratedPage, fetchSupplementalPool],
+  );
+
+  /** 재방문 시 캐시 사용 — 현재 지역만 즉시, 나머지는 순차 */
+  useEffect(() => {
+    const current = catalog[region]?.curated ?? [];
+    void fetchCuratedPage(region, current);
+    void fetchSupplementalPool(region);
+
+    const timers: number[] = [];
+    let delay = 3_000;
+    for (const r of JAPAN_REGIONS) {
+      if (r.id === region) continue;
+      timers.push(
+        window.setTimeout(() => {
+          const curated = catalog[r.id]?.curated ?? [];
+          refreshRegion(r.id, curated);
+        }, delay),
+      );
+      delay += 4_000;
     }
 
-    void (async () => {
-      const staleRegions = JAPAN_REGIONS.filter((r) =>
-        isAttractionCatalogStale(initialByRegion[r.id] ?? []),
-      );
-      if (staleRegions.length === 0) {
-        setWarming(false);
-        return;
-      }
-
-      try {
-        await Promise.all(staleRegions.map((r) => fetchRegion(r.id)));
-      } catch {
-        /* ignore */
-      } finally {
-        if (!cancelled) setWarming(false);
-      }
-    })();
-
     return () => {
-      cancelled = true;
+      for (const id of timers) window.clearTimeout(id);
     };
-  }, [initialByRegion]);
+    // catalog는 캐시 복원 직후 1회만 — 값 변경마다 재요청하지 않음
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [region, fetchCuratedPage, fetchSupplementalPool, refreshRegion]);
 
-  const upgrading = warming || isAttractionCatalogStale(byRegion[region] ?? []);
+  useEffect(() => {
+    setPage(1);
+    setSelected(null);
+  }, [region]);
 
-  const items = sortAttractionsByRating(byRegion[region] ?? []);
+  const regionCatalog = catalog[region];
+  const totalPages = regionCatalog ? totalPagesForCatalog(regionCatalog) : 1;
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+  const isCuratedPage = page === 1;
+  const isRefreshingCurated = loadingCurated.has(region);
+  const isRefreshingSupplemental = loadingSupplemental.has(region);
+
+  const items = useMemo(() => {
+    const cat = catalog[region];
+    if (!cat) return [];
+    if (page === 1) return cat.curated;
+    const start = (page - 2) * CURATED_ATTRACTIONS_PER_REGION;
+    return cat.supplemental.slice(start, start + CURATED_ATTRACTIONS_PER_REGION);
+  }, [catalog, region, page]);
+
+  const allRegionItems = useMemo(() => {
+    const cat = catalog[region];
+    if (!cat) return [];
+    return [...cat.curated, ...cat.supplemental];
+  }, [catalog, region]);
+
+  useEffect(() => {
+    const selectedId = selected?.id;
+    if (!selectedId) return;
+    const updated = allRegionItems.find((a) => a.id === selectedId);
+    if (!updated) return;
+    setSelected((prev) => {
+      if (!prev || prev.id !== selectedId) return prev;
+      if (
+        prev.imageUrl === updated.imageUrl &&
+        prev.rating === updated.rating &&
+        prev.wikiUrl === updated.wikiUrl
+      ) {
+        return prev;
+      }
+      return updated;
+    });
+  }, [allRegionItems, selected?.id]);
+
   const selectedId = selected?.id ?? null;
+  const rankOffset = isCuratedPage ? 0 : (page - 2) * CURATED_ATTRACTIONS_PER_REGION;
+  const supplementalCount = regionCatalog?.supplemental.length ?? 0;
+  const totalAttractionCount = (regionCatalog?.curated.length ?? 0) + supplementalCount;
+  const supplementalLoadFailed = supplementalFailed.has(region);
+  const supplementalSettled =
+    isSupplementalDone(region) && !isRefreshingSupplemental && supplementalCount === 0;
+
+  function retrySupplemental() {
+    resetSupplementalFetch(region);
+    setCatalog((prev) => ({
+      ...prev,
+      [region]: { ...prev[region], supplemental: [] },
+    }));
+    void fetchSupplementalPool(region);
+  }
 
   function handleSelect(a: AttractionResult) {
     setSelected(a);
@@ -286,7 +537,6 @@ export function AttractionList({ initialByRegion }: AttractionListProps) {
           value={region}
           onChange={(e) => {
             setPickedRegion(e.target.value as JapanRegionId);
-            setSelected(null);
           }}
           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm sm:max-w-xs"
         >
@@ -315,20 +565,63 @@ export function AttractionList({ initialByRegion }: AttractionListProps) {
       </div>
 
       <p className="text-xs text-slate-500">
-        {items.length}곳 · Google Places 실평점순 (1번이 최고 평점)
-        {upgrading ? (
-          <span className="ml-2 text-[var(--primary)]">Google Places 불러오는 중…</span>
+        {supplementalCount > 0 ? (
+          <>
+            지역 전체 <span className="font-medium text-slate-700">{totalAttractionCount}곳</span>
+            {" · "}
+            {page}/{totalPages}페이지 (이 페이지 {items.length}곳)
+          </>
+        ) : (
+          <>
+            {page}페이지 · {items.length}곳
+            {isCuratedPage ? " · 대표 큐레이션 명소" : " · Google·OSM 추가 관광지"}
+          </>
+        )}
+        {isCuratedPage && isRefreshingCurated ? (
+          <span className="ml-2 text-[var(--primary)]">사진·평점 불러오는 중…</span>
+        ) : null}
+        {isCuratedPage && isRefreshingSupplemental && supplementalCount === 0 ? (
+          <span className="ml-2 text-[var(--primary)]">
+            추가 관광지 불러오는 중… (2페이지부터 표시)
+          </span>
+        ) : null}
+        {!isCuratedPage && isRefreshingSupplemental ? (
+          <span className="ml-2 text-[var(--primary)]">추가 목록 불러오는 중…</span>
+        ) : null}
+        {supplementalLoadFailed ? (
+          <span className="ml-2 text-rose-600">
+            추가 관광지를 불러오지 못했습니다.
+            <button
+              type="button"
+              onClick={retrySupplemental}
+              className="ml-1 underline hover:text-rose-700"
+            >
+              다시 시도
+            </button>
+          </span>
+        ) : null}
+        {supplementalSettled && !supplementalLoadFailed ? (
+          <span className="ml-2 text-slate-400">추가 관광지가 더 없습니다 (1페이지만).</span>
         ) : null}
       </p>
 
-      {items.length === 0 ? (
-        <p className="py-12 text-center text-sm text-slate-500">이 지역 관광지가 없습니다.</p>
+      {items.length === 0 && !isCuratedPage && isRefreshingSupplemental ? (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div
+              key={i}
+              className="h-64 animate-pulse rounded-2xl bg-gradient-to-br from-slate-100 to-slate-200"
+            />
+          ))}
+        </div>
+      ) : items.length === 0 ? (
+        <p className="py-12 text-center text-sm text-slate-500">이 페이지에 표시할 관광지가 없습니다.</p>
       ) : view === "list" ? (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {items.map((a, index) => (
             <li key={a.id}>
               <AttractionCard
-                rank={index + 1}
+                rank={rankOffset + index + 1}
                 attraction={a}
                 onSelect={() => handleSelect(a)}
               />
@@ -361,11 +654,20 @@ export function AttractionList({ initialByRegion }: AttractionListProps) {
                 items={items}
                 selectedId={selectedId}
                 onSelect={handleSelect}
+                rankOffset={rankOffset}
               />
             </div>
           </div>
         </div>
       )}
+
+      {totalPages > 1 ? (
+        <p className="text-center text-xs text-slate-500">
+          아래 번호를 눌러 2페이지 이후 추가 관광지를 보세요.
+        </p>
+      ) : null}
+
+      <AttractionPagination page={page} totalPages={totalPages} onChange={setPage} />
 
       <AttractionDetailModal attraction={selected} onClose={() => setSelected(null)} />
     </div>
