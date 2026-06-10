@@ -5,6 +5,7 @@
  * .env: GOOGLE_PLACES_API_KEY=AIza...
  * 서버에서만 호출하세요 (클라이언트 노출 금지).
  */
+import { formatOpeningHours } from "@/server/translate/format-opening-hours";
 
 const BASE = "https://places.googleapis.com/v1";
 
@@ -139,13 +140,14 @@ function mapSummary(place: ApiPlace, imageUrl?: string): GooglePlaceSummary | nu
     servesBeer: place.servesBeer,
     servesWine: place.servesWine,
     servesVegetarianFood: place.servesVegetarianFood,
-    hours: place.regularOpeningHours?.weekdayDescriptions?.join(" · "),
+    hours: formatOpeningHours(place.regularOpeningHours?.weekdayDescriptions),
     priceLevel: place.priceLevel,
     imageUrl,
   };
 }
 
 function mapReviews(place: ApiPlace): GooglePlaceReview[] {
+  const hangul = /[가-힣]/;
   return (place.reviews ?? [])
     .filter((r) => r.text?.text?.trim())
     .map((r) => ({
@@ -153,7 +155,12 @@ function mapReviews(place: ApiPlace): GooglePlaceReview[] {
       rating: r.rating ?? 0,
       createdAt: r.publishTime?.slice(0, 10) ?? "",
       text: r.text!.text!.trim(),
-    }));
+    }))
+    .sort((a, b) => {
+      const ak = hangul.test(a.text) ? 0 : 1;
+      const bk = hangul.test(b.text) ? 0 : 1;
+      return ak - bk;
+    });
 }
 
 export async function resolvePhotoUrl(photoName: string): Promise<string | undefined> {
@@ -246,12 +253,18 @@ export async function searchTextPlace(options: {
   return mapSummary(place, imageUrl);
 }
 
-export async function getPlaceDetails(placeId: string): Promise<GooglePlaceDetails | null> {
-  const json = await request<ApiPlace>(`/places/${placeId}`, {
-    method: "GET",
-    fieldMask:
-      "id,displayName,formattedAddress,location,rating,userRatingCount,types,primaryType,editorialSummary,regularOpeningHours,priceLevel,photos,reviews",
-  });
+export async function getPlaceDetails(
+  placeId: string,
+  languageCode = "ko",
+): Promise<GooglePlaceDetails | null> {
+  const json = await request<ApiPlace>(
+    `/places/${placeId}?languageCode=${encodeURIComponent(languageCode)}`,
+    {
+      method: "GET",
+      fieldMask:
+        "id,displayName,formattedAddress,location,rating,userRatingCount,types,primaryType,editorialSummary,regularOpeningHours,priceLevel,photos,reviews",
+    },
+  );
 
   if (!json?.id) return null;
   const imageUrl = await firstPhotoUrl(json);

@@ -70,7 +70,7 @@ export function ChecklistPanel() {
         </p>
         <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100">
           <div
-            className="h-full bg-rose-500 transition-all"
+            className="h-full bg-brand transition-all"
             style={{ width: `${items.length ? (done / items.length) * 100 : 0}%` }}
           />
         </div>
@@ -89,7 +89,7 @@ export function ChecklistPanel() {
               </span>
               <button
                 type="button"
-                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-rose-50 hover:text-rose-600"
+                className="rounded-lg p-1.5 text-slate-400 transition hover:bg-[var(--primary-light)] hover:text-brand"
                 onClick={() => removeItem(item.id)}
                 aria-label={`${item.label} 삭제`}
               >

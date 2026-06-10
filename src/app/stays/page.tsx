@@ -2,12 +2,27 @@ import { AppShell } from "@/shared/layout/app-shell";
 import { StaySearch } from "@/features/stays/components/stay-search";
 import {
   DEFAULT_STAY_SEARCH,
-  ensureCatalogWarm,
+  ensureStaysWarm,
   getStaysCatalog,
 } from "@/server/preload/catalog";
+import { JAPAN_REGIONS, type JapanRegionId } from "@/shared/lib/constants";
 
-export default async function StaysPage() {
-  await ensureCatalogWarm();
+function parseRegion(value: string | undefined): JapanRegionId | undefined {
+  if (value && JAPAN_REGIONS.some((r) => r.id === value)) {
+    return value as JapanRegionId;
+  }
+  return undefined;
+}
+
+export default async function StaysPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ region?: string }>;
+}) {
+  const { region: regionParam } = await searchParams;
+  const priorityRegion = parseRegion(regionParam);
+
+  void ensureStaysWarm(priorityRegion);
   const initialByRegion = getStaysCatalog();
 
   return (
@@ -16,7 +31,11 @@ export default async function StaysPage() {
         숙소 목록은 서버 시작 시 미리 불러옵니다. 지역 변경은 즉시 반영되며, 날짜·예산을
         바꾼 뒤에는 검색 버튼으로 다시 조회할 수 있습니다.
       </p>
-      <StaySearch initialByRegion={initialByRegion} defaultSearch={DEFAULT_STAY_SEARCH} />
+      <StaySearch
+        initialByRegion={initialByRegion}
+        defaultSearch={DEFAULT_STAY_SEARCH}
+        initialRegion={priorityRegion}
+      />
     </AppShell>
   );
 }

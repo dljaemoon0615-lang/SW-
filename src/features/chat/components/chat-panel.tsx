@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSession } from "next-auth/react";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
@@ -28,37 +28,36 @@ export function ChatPanel({ variant = "page" }: ChatPanelProps) {
   const [error, setError] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
 
-  const loadHistory = useCallback(async () => {
-    setHistoryLoading(true);
-    setError("");
-    try {
-      const res = await fetch("/api/chat/sessions");
-      if (res.status === 401) {
-        setMessages([]);
-        setSessionId(undefined);
-        return;
-      }
-      if (!res.ok) throw new Error("대화 불러오기 실패");
-      const data = await res.json();
-      if (data.sessionId) setSessionId(data.sessionId);
-      if (data.messages) setMessages(data.messages);
-    } catch {
-      setError("이전 대화를 불러오지 못했습니다.");
-    } finally {
-      setHistoryLoading(false);
-    }
-  }, []);
-
   useEffect(() => {
     if (status === "loading") return;
-    if (status !== "authenticated" || !session?.user?.id) {
-      setMessages([]);
-      setSessionId(undefined);
-      setHistoryLoading(false);
-      return;
-    }
-    loadHistory();
-  }, [status, session?.user?.id, loadHistory]);
+    if (status !== "authenticated" || !session?.user?.id) return;
+
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const res = await fetch("/api/chat/sessions");
+        if (cancelled) return;
+        if (res.status === 401) {
+          setMessages([]);
+          setSessionId(undefined);
+          return;
+        }
+        if (!res.ok) throw new Error("대화 불러오기 실패");
+        const data = await res.json();
+        if (data.sessionId) setSessionId(data.sessionId);
+        if (data.messages) setMessages(data.messages);
+      } catch {
+        if (!cancelled) setError("이전 대화를 불러오지 못했습니다.");
+      } finally {
+        if (!cancelled) setHistoryLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [status, session?.user?.id]);
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -105,7 +104,7 @@ export function ChatPanel({ variant = "page" }: ChatPanelProps) {
             type="button"
             onClick={() => send(q)}
             disabled={loading || historyLoading}
-            className="rounded-full bg-rose-50 px-3 py-1 text-xs text-rose-700 transition hover:bg-rose-100 disabled:opacity-50"
+            className="rounded-full bg-[var(--primary-light)] px-3 py-1 text-xs text-brand transition hover:bg-brand/10 disabled:opacity-50"
           >
             {q}
           </button>
@@ -127,8 +126,8 @@ export function ChatPanel({ variant = "page" }: ChatPanelProps) {
             className={
               m.role === "user"
                 ? isFloating
-                  ? "ml-6 border-rose-100 bg-rose-50 py-2.5"
-                  : "ml-8 bg-rose-50"
+                  ? "ml-6 border-brand/20 bg-[var(--primary-light)] py-2.5"
+                  : "ml-8 bg-[var(--primary-light)]"
                 : isFloating
                   ? "mr-6 py-2.5"
                   : "mr-8"
@@ -154,7 +153,7 @@ export function ChatPanel({ variant = "page" }: ChatPanelProps) {
           onChange={(e) => setInput(e.target.value)}
           placeholder="여행 질문을 입력하세요"
           disabled={historyLoading}
-          className="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-rose-300 focus:ring-2 focus:ring-rose-100"
+          className="flex-1 rounded-xl border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-brand/50 focus:ring-2 focus:ring-brand/20"
         />
         <Button
           type="submit"

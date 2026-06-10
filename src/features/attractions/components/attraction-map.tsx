@@ -57,8 +57,10 @@ export function AttractionMap({
   const selectedIdRef = useRef(selectedId);
   const mappableKeyRef = useRef("");
 
-  onSelectRef.current = onSelect;
-  selectedIdRef.current = selectedId;
+  useEffect(() => {
+    onSelectRef.current = onSelect;
+    selectedIdRef.current = selectedId;
+  });
 
   const [mapReady, setMapReady] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -150,9 +152,13 @@ export function AttractionMap({
 
       try {
         await loadGoogleMaps(apiKey);
-      } catch {
+      } catch (error) {
         if (!cancelled) {
-          setLoadError("Google Maps를 불러오지 못했습니다. Maps JavaScript API 활성화를 확인하세요.");
+          const detail =
+            error instanceof Error ? error.message : "알 수 없는 오류";
+          setLoadError(
+            `Google Maps를 불러오지 못했습니다. (${detail}) Maps JavaScript API 활성화·키 제한을 확인하세요.`,
+          );
         }
         return;
       }
@@ -179,11 +185,12 @@ export function AttractionMap({
     return () => {
       cancelled = true;
       setMapReady(false);
-      markersByIdRef.current.forEach((m) => m.setMap(null));
-      markersByIdRef.current.clear();
+      const markers = markersByIdRef.current;
+      markers.forEach((m) => m.setMap(null));
+      markers.clear();
       mapRef.current = null;
     };
-  }, []);
+  }, [region]);
 
   useEffect(() => {
     if (!mapReady || !mapRef.current) return;

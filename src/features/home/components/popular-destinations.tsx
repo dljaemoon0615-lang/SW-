@@ -17,8 +17,8 @@ export function PopularDestinations() {
               <p className="mb-5 line-clamp-2 text-sm leading-relaxed text-[var(--muted)]">
                 {dest.desc}
               </p>
-              <Link href={dest.href} className="btn-card-dark">
-                일정 짜기
+              <Link href={dest.href} className="btn-card-dark" prefetch>
+                관광지 보기
               </Link>
             </div>
           </article>

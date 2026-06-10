@@ -2,6 +2,7 @@ import { aiAdapter } from "@/server/ai/adapter";
 import type { RestaurantResult, RestaurantSearchRequest } from "@/server/ai/types";
 import { searchGoogleRestaurants } from "@/server/google-places/restaurants";
 import { applyFromMap, buildKoTranslationMap } from "@/server/translate/ko-map";
+import { formatOpeningHours } from "@/server/translate/format-opening-hours";
 
 async function applyKoToRestaurants(
   items: RestaurantResult[],
@@ -22,7 +23,8 @@ async function applyKoToRestaurants(
     ...r,
     name: applyFromMap(r.name, map) ?? r.name,
     cuisine: applyFromMap(r.cuisine, map) ?? r.cuisine,
-    hours: applyFromMap(r.hours, map) ?? r.hours,
+    hours:
+      formatOpeningHours(applyFromMap(r.hours, map) ?? r.hours) ?? "영업시간 정보 없음",
     menuSummary: r.menuSummary ? (applyFromMap(r.menuSummary, map) ?? r.menuSummary) : undefined,
     menuItems: r.menuItems?.map((item) => applyFromMap(item, map) ?? item),
   }));

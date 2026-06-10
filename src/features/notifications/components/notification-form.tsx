@@ -24,15 +24,28 @@ export function NotificationForm() {
   }, []);
 
   useEffect(() => {
-    fetch("/api/notifications/settings")
-      .then((r) => r.json())
-      .then((d) => {
-        if (d.enabled !== undefined) setEnabled(d.enabled);
-        if (d.notifyTime) setNotifyTime(d.notifyTime);
-        if (d.kakaoUserId) setKakaoUserId(d.kakaoUserId);
-      })
-      .finally(() => setLoading(false));
-    loadPreview();
+    let cancelled = false;
+
+    void (async () => {
+      try {
+        const res = await fetch("/api/notifications/settings");
+        if (res.ok) {
+          const d = await res.json();
+          if (!cancelled) {
+            if (d.enabled !== undefined) setEnabled(d.enabled);
+            if (d.notifyTime) setNotifyTime(d.notifyTime);
+            if (d.kakaoUserId) setKakaoUserId(d.kakaoUserId);
+          }
+        }
+        await loadPreview();
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [loadPreview]);
 
   async function save() {

@@ -36,7 +36,7 @@ export type SortablePlaceItem = {
 };
 
 const inputClass =
-  "w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800 outline-none focus:border-rose-300 focus:ring-1 focus:ring-rose-200";
+  "w-full rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-xs text-slate-800 outline-none focus:border-brand/50 focus:ring-1 focus:ring-brand/20";
 
 function stopDragPointer(e: React.PointerEvent) {
   e.stopPropagation();
@@ -61,7 +61,7 @@ function ItemRowContent({
 
   return (
     <Card
-      className={`mb-2 flex items-start gap-2 !py-2.5 ${elevated ? "shadow-lg ring-2 ring-rose-300" : ""}`}
+      className={`mb-2 flex items-start gap-2 !py-2.5 ${elevated ? "shadow-lg ring-2 ring-brand/40" : ""}`}
     >
       {dragHandle}
       {thumb ? (

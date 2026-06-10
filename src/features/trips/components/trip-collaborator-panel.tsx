@@ -110,7 +110,7 @@ export function TripCollaboratorPanel({
   return (
     <Card className="space-y-4">
       <div className="flex items-center gap-2">
-        <Users size={18} className="text-rose-600" />
+        <Users size={18} className="text-brand" />
         <h2 className="font-semibold text-slate-900">동행자 · 공동 편집</h2>
       </div>
       <p className="text-sm text-slate-600">

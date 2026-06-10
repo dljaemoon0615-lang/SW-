@@ -43,7 +43,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       className={`${notoSans.variable} ${montserrat.variable} h-full`}
     >
       <body className="min-h-full antialiased">
-        <Providers>{children}</Providers>
+        <Providers viewMode={viewMode}>{children}</Providers>
       </body>
     </html>
   );

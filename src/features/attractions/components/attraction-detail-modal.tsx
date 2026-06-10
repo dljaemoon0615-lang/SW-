@@ -15,23 +15,28 @@ type Props = {
 };
 
 export function AttractionDetailModal({ attraction, onClose }: Props) {
+  if (!attraction) return null;
+  return <AttractionDetailModalBody key={attraction.id} attraction={attraction} onClose={onClose} />;
+}
+
+function AttractionDetailModalBody({
+  attraction,
+  onClose,
+}: {
+  attraction: AttractionResult;
+  onClose: () => void;
+}) {
   const [photoIndex, setPhotoIndex] = useState(0);
   const [lightbox, setLightbox] = useState(false);
 
   const photos =
-    attraction?.imageUrls?.length
+    attraction.imageUrls?.length
       ? attraction.imageUrls
-      : attraction?.imageUrl
+      : attraction.imageUrl
         ? [attraction.imageUrl]
         : [];
 
   useEffect(() => {
-    setPhotoIndex(0);
-    setLightbox(false);
-  }, [attraction?.id]);
-
-  useEffect(() => {
-    if (!attraction) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (lightbox) {
@@ -46,9 +51,7 @@ export function AttractionDetailModal({ attraction, onClose }: Props) {
       document.body.style.overflow = "";
       window.removeEventListener("keydown", onKey);
     };
-  }, [attraction, onClose, lightbox]);
-
-  if (!attraction) return null;
+  }, [onClose, lightbox]);
 
   const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${attraction.lat},${attraction.lng}`;
   const crowdLabel =
@@ -173,7 +176,7 @@ export function AttractionDetailModal({ attraction, onClose }: Props) {
           <div className="mt-4 grid gap-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
             {attraction.fee ? (
               <p className="flex items-center gap-2">
-                <Ticket size={16} className="shrink-0 text-rose-500" />
+                <Ticket size={16} className="shrink-0 text-brand" />
                 입장료 {attraction.fee}
               </p>
             ) : null}
@@ -256,7 +259,7 @@ export function AttractionDetailModal({ attraction, onClose }: Props) {
               href={mapsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-rose-600"
+              className="btn-primary inline-flex flex-1 items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium"
             >
               <ExternalLink size={16} />
               지도에서 보기

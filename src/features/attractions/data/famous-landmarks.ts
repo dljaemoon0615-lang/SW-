@@ -308,3 +308,18 @@ const FALLBACK_BY_ID = new Map(LANDMARKS.map((l) => [l.id, l.fallbackDescription
 export function getLandmarkFallbackDescription(id: string): string | undefined {
   return FALLBACK_BY_ID.get(id);
 }
+
+/** DeepL 없이 쓸 정적 번역 맵 (일본어명·설명 → 한국어) */
+export function getLandmarkKoMap(): Record<string, string> {
+  const map: Record<string, string> = {};
+  for (const l of LANDMARKS) {
+    map[l.nameJa] = l.nameKo;
+    map[l.nameKo] = l.nameKo;
+    map[l.fallbackDescription] = l.fallbackDescription;
+    if (l.wikipediaTag) {
+      const title = l.wikipediaTag.replace(/^ja:/, "");
+      map[title] = l.nameKo;
+    }
+  }
+  return map;
+}

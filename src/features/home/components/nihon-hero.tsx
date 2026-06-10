@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { BrandMark } from "@/shared/ui/brand-logo";
 import { TripDateRangePicker } from "@/shared/ui/trip-date-range-picker";
 import {
@@ -28,6 +28,19 @@ export function NihonHero() {
   const [guests, setGuests] = useState(1);
 
   const regionLabel = JAPAN_REGIONS.find((r) => r.id === region)?.label ?? "도쿄";
+
+  useEffect(() => {
+    const params = new URLSearchParams({
+      region,
+      startDate: dateRange.startDate,
+      endDate: dateRange.endDate,
+      guests: String(guests),
+    });
+    router.prefetch(`/planner?${params.toString()}`);
+    router.prefetch(`/attractions?region=${region}`);
+    router.prefetch(`/stays?region=${region}`);
+    router.prefetch(`/restaurants?region=${region}`);
+  }, [region, dateRange.startDate, dateRange.endDate, guests, router]);
 
   function startPlan() {
     const params = new URLSearchParams({
@@ -58,7 +71,7 @@ export function NihonHero() {
           <p className="hero-sub">{APP_DESCRIPTION}</p>
           <p className="hero-cities">
             <MapPin size={14} />
-            도쿄 · 오사카 · 교토 · 후쿠오카 · 삿포로
+            도쿄 · 오사카 · 교토 · 후쿠오카
           </p>
 
           <div className="search-box">

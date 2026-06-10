@@ -5,7 +5,8 @@ import {
   type WikiDetail,
 } from "@/server/attractions/travel-client";
 import { enrichAttractionsWithRatings } from "@/features/attractions/data/attraction-ratings";
-import { searchGoogleAttractions } from "@/server/google-places/attractions";
+import { sortAttractionsByRating } from "@/features/attractions/lib/sort-attractions";
+import { searchGoogleAttractions, applyGoogleRatingsFromPlaces } from "@/server/google-places/attractions";
 import { hasGooglePlacesKey } from "@/server/google-places/client";
 import {
   getFamousLandmarksForRegion,
@@ -14,9 +15,11 @@ import {
 } from "@/features/attractions/data/famous-landmarks";
 import type { AttractionResult } from "@/server/ai/types";
 import { applyFromMap, buildKoTranslationMap } from "@/server/translate/ko-map";
+import { categoryLabelKo } from "@/server/translate/category-labels";
+import { formatOpeningHours } from "@/server/translate/format-opening-hours";
 import type { JapanRegionId } from "@/shared/lib/constants";
 
-const CACHE_VERSION = 5;
+const CACHE_VERSION = 10;
 
 type RegionSpot = { lat: number; lon: number; radius: number };
 
@@ -151,7 +154,7 @@ function estimateCrowd(
   return {
     crowdLevel,
     estimatedWaitMinutes,
-    crowdReason: `도착지 현지시간(${hour}시)·${isWeekend ? "주말" : "평일"}·카테고리(${c}) 기준 추정`,
+    crowdReason: `도착지 현지시간(${hour}시)·${isWeekend ? "주말" : "평일"}·${categoryLabelKo(c)} 기준 추정`,
     recommendedTimeSlots,
     bestVisitTags: [baseTag, timeTag, dayTag],
   };
@@ -176,12 +179,6 @@ function toResult(place: OverpassPlace, detail: WikiDetail): AttractionResult {
     recommendedTimeSlots: crowd.recommendedTimeSlots,
     bestVisitTags: crowd.bestVisitTags,
   };
-}
-
-function rankKoreanFirst(a: AttractionResult, b: AttractionResult): number {
-  const ak = HANGUL_RE.test(a.name) ? 0 : 1;
-  const bk = HANGUL_RE.test(b.name) ? 0 : 1;
-  return ak - bk;
 }
 
 /** DeepL로 이름·설명·태그 등 일·영 잔여 문구를 한국어로 통일 */
@@ -213,12 +210,22 @@ async function applyKoTranslations(
       crowdReason: applyFromMap(i.crowdReason, map),
       tips: applyFromMap(i.tips, map),
       address: applyFromMap(i.address, map),
+      hours: formatOpeningHours(applyFromMap(i.hours, map) ?? i.hours),
       bestVisitTags: i.bestVisitTags?.map((t) => applyFromMap(t, map) ?? t),
       highlights: i.highlights?.map((h) => applyFromMap(h, map) ?? h),
-      reviews: i.reviews?.map((r) => ({
-        ...r,
-        text: applyFromMap(r.text, map) ?? r.text,
-      })),
+      reviews: i.reviews
+        ?.map((r) => {
+          const raw = r.text?.trim() ?? "";
+          if (!raw) return null;
+          const translated = (applyFromMap(r.text, map) ?? raw).trim();
+          const text = HANGUL_RE.test(translated)
+            ? translated
+            : HANGUL_RE.test(raw)
+              ? raw
+              : undefined;
+          return text ? { ...r, text } : null;
+        })
+        .filter((r): r is NonNullable<typeof r> => r !== null),
     };
   });
 }
@@ -234,7 +241,8 @@ async function fetchFromGoogle(region: JapanRegionId): Promise<AttractionResult[
   const fromGoogle = await searchGoogleAttractions(region);
   if (!fromGoogle?.length) return null;
   const withCrowd = attachCrowdEstimates(fromGoogle);
-  return applyKoTranslations(withCrowd);
+  const translated = await applyKoTranslations(withCrowd);
+  return sortAttractionsByRating(translated);
 }
 
 /**
@@ -268,13 +276,6 @@ function rankPlaceForEnrichment(a: OverpassPlace, b: OverpassPlace): number {
   const wa = a.wikipediaTag ? 0 : 1;
   const wb = b.wikipediaTag ? 0 : 1;
   return wa - wb;
-}
-
-function rankFinalResults(a: AttractionResult, b: AttractionResult): number {
-  const ca = isCuratedId(a.id) ? 0 : 1;
-  const cb = isCuratedId(b.id) ? 0 : 1;
-  if (ca !== cb) return ca - cb;
-  return rankKoreanFirst(a, b);
 }
 
 /**
@@ -339,18 +340,19 @@ export async function getAttractionsByRegion(
       );
     }
   }
-  items.sort(rankFinalResults);
   const translated = await applyKoTranslations(items);
   const withRatings = enrichAttractionsWithRatings(translated);
+  const withGoogleRatings = await applyGoogleRatingsFromPlaces(region, withRatings);
+  const sorted = sortAttractionsByRating(withGoogleRatings);
 
-  if (withRatings.length >= 5) {
+  if (sorted.length >= 5) {
     memoryCache.set(region, {
       expires: now + CACHE_TTL_MS,
-      data: withRatings,
+      data: sorted,
       version: CACHE_VERSION,
     });
   }
-  return withRatings;
+  return sorted;
 }
 
 /** 기존 호출처 호환용 별칭 */

@@ -12,10 +12,13 @@
     "db:studio": "prisma studio",
     "check:auth": "node scripts/check-auth-env.mjs",
     "check:google": "node scripts/verify-google-oauth.mjs",
+    "check:google-maps": "node scripts/verify-google-maps-js.mjs",
     "check:kakao": "node scripts/verify-kakao-oauth.mjs",
     "check:resend": "node scripts/verify-resend.mjs",
     "seed:fukuoka": "node scripts/seed-fukuoka-trip.mjs",
-    "cron:local": "node scripts/kakao-cron-local.mjs"
+    "cron:local": "node scripts/kakao-cron-local.mjs",
+    "generate:preloaded-ko": "node scripts/generate-preloaded-ko.mjs",
+    "generate:preloaded-ko:static": "node scripts/generate-preloaded-ko.mjs --static"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",

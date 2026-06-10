@@ -1,4 +1,14 @@
 import { translateToKoBatch } from "@/server/translate/deepl-client";
+import { formatOpeningHours } from "@/server/translate/format-opening-hours";
+import { isAlreadyKorean } from "@/server/translate/localize-text";
+import { isMostlyJapanese, translateJa } from "@/server/translate/ja-ko-utils";
+
+function defaultFallback(text: string): string {
+  if (isAlreadyKorean(text)) return text;
+  const hours = formatOpeningHours(text);
+  if (hours && hours !== text) return hours;
+  return isMostlyJapanese(text) ? translateJa(text) : text;
+}
 
 function pick(
   text: string,
@@ -15,7 +25,7 @@ function pick(
  */
 export async function buildKoTranslationMap(
   texts: Array<string | undefined | null>,
-  fallback?: (text: string) => string,
+  fallback: (text: string) => string = defaultFallback,
 ): Promise<Map<string, string>> {
   const unique = [
     ...new Set(texts.map((t) => t?.trim()).filter((t): t is string => !!t)),

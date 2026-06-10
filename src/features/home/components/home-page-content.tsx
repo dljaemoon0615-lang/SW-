@@ -7,7 +7,7 @@ import { PlannerPreviewSection } from "./planner-preview-section";
 
 export function HomePageContent() {
   return (
-    <div className="min-h-full bg-[var(--background)]">
+    <div className="home-page-root view-desktop-only min-h-full bg-[var(--background)]">
       <div className="home-sky-wrap">
         <div
           className="home-sky-photo"
@@ -24,7 +24,7 @@ export function HomePageContent() {
         <SiteHeader tone="sky" />
         <NihonHero />
       </div>
-      <main className="mx-auto max-w-[1200px] px-5 py-14 md:px-5">
+      <main className="home-below-hero mx-auto max-w-[1200px] px-5 py-14 md:px-5">
         <PopularDestinations />
         <PlannerPreviewSection />
       </main>

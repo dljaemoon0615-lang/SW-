@@ -37,7 +37,7 @@ export default async function TripsPage() {
       </p>
       <Link
         href="/planner"
-        className="mb-6 block rounded-xl border border-dashed border-rose-200 bg-rose-50/50 py-3 text-center text-sm font-medium text-rose-600 transition hover:bg-rose-50"
+        className="mb-6 block rounded-xl border border-dashed border-brand/30 bg-[var(--primary-light)] py-3 text-center text-sm font-medium text-brand transition hover:bg-[var(--primary-light)]"
       >
         + 새 일정 만들기
       </Link>

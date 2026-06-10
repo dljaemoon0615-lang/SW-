@@ -79,7 +79,7 @@ export function SiteHeader({ tone = "default" }: { tone?: "default" | "sky" }) {
         <BrandLogo variant="header" />
 
         {!isMobile ? (
-          <nav className="view-desktop-only">
+          <nav>
             <ul className="flex list-none gap-7">
               {NAV.map(({ href, label }) => {
                 const active =

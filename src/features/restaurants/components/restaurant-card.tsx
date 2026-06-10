@@ -17,7 +17,7 @@ export function RestaurantCard({ restaurant, onSelect }: Props) {
     <button
       type="button"
       onClick={onSelect}
-      className="group w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-white text-left shadow-sm transition hover:scale-[1.01] hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+      className="group w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-white text-left shadow-sm transition hover:scale-[1.01] hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
     >
       <div className="relative">
         {photo ? (
@@ -67,7 +67,7 @@ export function RestaurantCard({ restaurant, onSelect }: Props) {
       <div className="space-y-2 px-3 py-2.5">
         <div className="flex flex-wrap gap-3 text-xs text-slate-600">
           <span className="inline-flex items-center gap-1">
-            <Wallet size={13} className="text-rose-500" />약 {restaurant.avgPriceKrw.toLocaleString()}원
+            <Wallet size={13} className="text-brand" />약 {restaurant.avgPriceKrw.toLocaleString()}원
           </span>
           <span className="inline-flex items-center gap-1">
             <MapPin size={13} className="text-slate-400" />
@@ -82,11 +82,11 @@ export function RestaurantCard({ restaurant, onSelect }: Props) {
         </div>
         {menuPreview.length > 0 ? (
           <div className="flex flex-wrap items-center gap-1.5">
-            <UtensilsCrossed size={12} className="shrink-0 text-rose-500" />
+            <UtensilsCrossed size={12} className="shrink-0 text-brand" />
             {menuPreview.map((item) => (
               <span
                 key={item}
-                className="rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-800"
+                className="rounded-full bg-[var(--primary-light)] px-2 py-0.5 text-[11px] font-medium text-[var(--dark)]"
               >
                 {item}
               </span>

@@ -1,4 +1,6 @@
+import { getFamousLandmarksForRegion } from "@/features/attractions/data/famous-landmarks";
 import { ratingToDistribution } from "@/features/attractions/data/attraction-ratings";
+import { sortAttractionsByRating } from "@/features/attractions/lib/sort-attractions";
 import type { AttractionResult } from "@/server/ai/types";
 import type { JapanRegionId } from "@/shared/lib/constants";
 import {
@@ -6,6 +8,7 @@ import {
   hasGooglePlacesKey,
   mapInBatches,
   searchNearbyPlaces,
+  searchTextPlace,
   type GooglePlaceDetails,
   type GooglePlaceSummary,
 } from "@/server/google-places/client";
@@ -130,15 +133,22 @@ function mapsUrl(placeId: string): string {
   return `https://www.google.com/maps/place/?q=place_id:${placeId}`;
 }
 
-function toAttraction(place: GooglePlaceSummary): AttractionResult {
+function isGooglePlaceId(id: string): boolean {
+  return id.startsWith("ChIJ") || id.length > 20;
+}
+
+function toAttraction(
+  place: GooglePlaceSummary,
+  displayName?: string,
+): AttractionResult {
   const category = categoryFromTypes(place.types, place.primaryType);
   const rating = place.rating;
-  const name = place.name;
+  const name = displayName ?? place.name;
 
   return {
     id: place.id,
     name,
-    nameKo: HANGUL_RE.test(name) ? name : undefined,
+    nameKo: HANGUL_RE.test(name) ? name : displayName,
     lat: place.lat,
     lng: place.lng,
     category,
@@ -186,7 +196,78 @@ function applyDetails(
   };
 }
 
-/** Google Places nearby 검색으로 지역 관광지 목록을 가져옵니다 */
+function isNear(latA: number, lngA: number, latB: number, lngB: number, delta = 0.02): boolean {
+  return Math.abs(latA - latB) < delta && Math.abs(lngA - lngB) < delta;
+}
+
+async function mergeLandmarksFromGoogle(
+  region: JapanRegionId,
+  merged: Map<string, AttractionResult>,
+): Promise<void> {
+  const landmarks = getFamousLandmarksForRegion(region);
+  const found = await mapInBatches(landmarks, 3, async (landmark) => {
+    const place = await searchTextPlace({
+      textQuery: landmark.nameKo,
+      center: { latitude: landmark.lat, longitude: landmark.lng },
+      radiusMeters: 5000,
+      languageCode: "ko",
+    });
+    if (!place || !isAttractionPlace(place)) return null;
+    return toAttraction(place, landmark.nameKo);
+  });
+
+  for (const item of found) {
+    if (!item) continue;
+    const duplicate = [...merged.values()].some((existing) =>
+      isNear(existing.lat, existing.lng, item.lat, item.lng),
+    );
+    if (duplicate) continue;
+    merged.set(item.id, item);
+  }
+}
+
+/** OSM·mock 목록에 Google Places 실평점을 붙여 다시 정렬 */
+export async function applyGoogleRatingsFromPlaces(
+  region: JapanRegionId,
+  items: AttractionResult[],
+): Promise<AttractionResult[]> {
+  if (!hasGooglePlacesKey() || items.length === 0) return items;
+
+  const center = REGION_CENTERS[region]?.[0];
+  if (!center) return items;
+
+  const updated = await mapInBatches(items, 3, async (item) => {
+    if (isGooglePlaceId(item.id) && item.rating) return item;
+
+    const query = item.nameKo ?? item.name;
+    const place = await searchTextPlace({
+      textQuery: query,
+      center: { latitude: item.lat, longitude: item.lng },
+      radiusMeters: Math.max(center.radius, 8000),
+      languageCode: "ko",
+    });
+    if (!place?.rating) return item;
+
+    return {
+      ...item,
+      rating: place.rating,
+      reviewCount: place.reviewCount ?? item.reviewCount,
+      ratingDistribution: ratingToDistribution(place.rating),
+      wikiUrl: mapsUrl(place.id),
+      address: item.address ?? place.address,
+      imageUrl: item.imageUrl ?? place.imageUrl,
+      imageUrls: item.imageUrls?.length
+        ? item.imageUrls
+        : place.imageUrl
+          ? [place.imageUrl]
+          : item.imageUrls,
+    };
+  });
+
+  return sortAttractionsByRating(updated);
+}
+
+/** Google Places — 대표 명소 text search + nearby, Google 실평점순 */
 export async function searchGoogleAttractions(
   region: JapanRegionId,
 ): Promise<AttractionResult[] | null> {
@@ -194,6 +275,10 @@ export async function searchGoogleAttractions(
 
   const centers = REGION_CENTERS[region];
   if (!centers?.length) return null;
+
+  const merged = new Map<string, AttractionResult>();
+
+  await mergeLandmarksFromGoogle(region, merged);
 
   const lists = await Promise.all(
     centers.map((center) =>
@@ -207,21 +292,21 @@ export async function searchGoogleAttractions(
     ),
   );
 
-  const merged = new Map<string, AttractionResult>();
   for (const list of lists) {
     for (const place of list) {
       if (merged.has(place.id)) continue;
       if (!isAttractionPlace(place)) continue;
+      const duplicate = [...merged.values()].some((existing) =>
+        isNear(existing.lat, existing.lng, place.lat, place.lng),
+      );
+      if (duplicate) continue;
       merged.set(place.id, toAttraction(place));
     }
   }
 
   if (merged.size === 0) return null;
 
-  const sorted = Array.from(merged.values()).sort(
-    (a, b) => (b.rating ?? 0) - (a.rating ?? 0) || (b.reviewCount ?? 0) - (a.reviewCount ?? 0),
-  );
-  const results = sorted.slice(0, MAX_RESULTS);
+  const results = sortAttractionsByRating([...merged.values()]).slice(0, MAX_RESULTS);
 
   const detailed = await mapInBatches(results.slice(0, MAX_DETAILS), 4, async (item) => {
     const details = await getPlaceDetails(item.id);
@@ -231,5 +316,5 @@ export async function searchGoogleAttractions(
   const byId = new Map(detailed.map((item) => [item.id, item]));
   const final = results.map((item) => byId.get(item.id) ?? item);
 
-  return final.length > 0 ? final : null;
+  return final.length > 0 ? sortAttractionsByRating(final) : null;
 }

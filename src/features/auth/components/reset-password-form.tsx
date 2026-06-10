@@ -48,7 +48,7 @@ export function ResetPasswordForm() {
     return (
       <div className="space-y-3 text-sm text-slate-600">
         <p>재설정 링크가 올바르지 않습니다.</p>
-        <Link href="/forgot-password" className="font-medium text-rose-600">
+        <Link href="/forgot-password" className="font-medium text-brand">
           비밀번호 찾기 다시 하기
         </Link>
       </div>

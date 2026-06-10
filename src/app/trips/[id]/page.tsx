@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { format } from "date-fns";
 import { auth } from "@/auth";
@@ -49,7 +50,36 @@ export default async function TripDetailPage({ params }: { params: Promise<{ id:
         <h1 className="mt-1 text-2xl font-bold text-slate-900">{trip.title}</h1>
         <p className="mt-1 text-sm text-slate-600">
           {format(trip.startDate, "yyyy.MM.dd")} – {format(trip.endDate, "yyyy.MM.dd")}
+          {trip.totalBudget ? (
+            <span className="ml-2 text-brand">· 예산 {trip.totalBudget.toLocaleString()}원</span>
+          ) : null}
         </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <Link
+            href={`/attractions?region=${trip.region}`}
+            className="rounded-full border border-brand/30 bg-[var(--primary-light)] px-3 py-1 text-xs font-medium text-brand"
+          >
+            관광지
+          </Link>
+          <Link
+            href={`/stays?region=${trip.region}`}
+            className="rounded-full border border-brand/30 bg-[var(--primary-light)] px-3 py-1 text-xs font-medium text-brand"
+          >
+            숙박
+          </Link>
+          <Link
+            href={`/restaurants?region=${trip.region}`}
+            className="rounded-full border border-brand/30 bg-[var(--primary-light)] px-3 py-1 text-xs font-medium text-brand"
+          >
+            맛집
+          </Link>
+          <Link
+            href="/budget"
+            className="rounded-full border border-brand/30 bg-[var(--primary-light)] px-3 py-1 text-xs font-medium text-brand"
+          >
+            예산
+          </Link>
+        </div>
       </header>
 
       {access.canEdit ? (

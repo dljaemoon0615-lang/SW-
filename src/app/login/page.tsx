@@ -23,7 +23,7 @@ export default function LoginPage() {
         </Suspense>
         <p className="text-center text-sm text-slate-600">
           계정이 없으신가요?{" "}
-          <Link href="/register" className="font-medium text-rose-600">
+          <Link href="/register" className="font-medium text-brand">
             회원가입
           </Link>
         </p>

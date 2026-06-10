@@ -1,40 +1,59 @@
-/** 홈 히어로 배경 — 교토 풍경 (원본 메인과 동일 Unsplash) */
-export const HOME_HERO_BACKGROUND =
-  "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=1920&q=80";
+/** 관광 mock-data와 동일한 Unsplash 실사 ID */
+const unsplash = (photoId: string, w = 800) =>
+  `https://images.unsplash.com/${photoId}?auto=format&fit=crop&w=${w}&q=80`;
+
+const DESTINATION_PHOTOS = {
+  /** 도쿄 스카이라인 */
+  tokyo: "photo-1503899036084-c55cdd92da26",
+  /** 아라시야마 대나무숲 */
+  kyoto: "photo-1698618988744-737573cb6a7a",
+  /** 오사카성 */
+  osaka: "photo-1773467223754-b9f3eb4d2c0f",
+  /** 오호리 공원 */
+  fukuoka: "photo-1759547808543-5c11c3d308c8",
+  /** 후시미 이나리 — 히어로 배경 */
+  heroKyoto: "photo-1493976040374-85c8e12f0c0e",
+} as const;
+
+/** 홈 히어로 배경 — 교토 후시미 이나리 */
+export const HOME_HERO_BACKGROUND = unsplash(DESTINATION_PHOTOS.heroKyoto, 1920);
 
 export const POPULAR_DESTINATIONS = [
   {
     id: "TOKYO",
     title: "도쿄",
     desc: "시부야 크로싱, 도쿄타워 등 현대와 전통이 공존하는 메가시티",
-    image:
-      "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=800&q=80",
-    href: "/planner?region=TOKYO",
+    image: unsplash(DESTINATION_PHOTOS.tokyo),
+    href: "/attractions?region=TOKYO",
   },
   {
     id: "KYOTO",
     title: "교토",
     desc: "아라시야마 대나무숲과 아기자기한 신사들이 가득한 전통 도시",
-    image:
-      "https://images.unsplash.com/photo-1493976040374-85c8e12f0c0e?auto=format&fit=crop&w=800&q=80",
-    href: "/planner?region=OSAKA_KYOTO",
+    image: unsplash(DESTINATION_PHOTOS.kyoto),
+    href: "/attractions?region=OSAKA_KYOTO",
   },
   {
     id: "OSAKA",
     title: "오사카",
     desc: "도톤보리 글리코상과 맛있는 길거리 음식이 가득한 식도락의 천국",
-    image:
-      "https://images.unsplash.com/photo-1773841040192-c83fc7a95f8a?auto=format&fit=crop&w=800&q=80",
-    href: "/planner?region=OSAKA_KYOTO",
+    image: unsplash(DESTINATION_PHOTOS.osaka),
+    href: "/attractions?region=OSAKA_KYOTO",
   },
   {
-    id: "HOKKAIDO",
-    title: "홋카이도",
-    desc: "라벤더 밭과 하얀 눈발, 온천을 즐길 수 있는 최고의 자연 휴양지",
-    image:
-      "https://images.unsplash.com/photo-1542640244-7e672d6cef4e?auto=format&fit=crop&w=800&q=80",
-    href: "/planner?region=SAPPORO",
+    id: "FUKUOKA",
+    title: "후쿠오카",
+    desc: "나카스·오호리 공원·하카타 라멘 등 규슈 여행의 관문 도시",
+    image: unsplash(DESTINATION_PHOTOS.fukuoka),
+    href: "/attractions?region=FUKUOKA",
   },
+] as const;
+
+/** 홈 플래너 예시 지도 마커 (도쿄) */
+export const HOME_PREVIEW_MAP_MARKERS = [
+  { id: "shinjuku", label: "신주쿠", lat: 35.6896, lng: 139.7006 },
+  { id: "shibuya", label: "시부야 스카이", lat: 35.6585, lng: 139.7013 },
+  { id: "asakusa", label: "아사쿠사 센소지", lat: 35.7148, lng: 139.7967 },
 ] as const;
 
 export const PLANNER_TIMELINE = [
@@ -64,11 +83,11 @@ export const AI_SUGGESTIONS = [
   {
     name: "라멘 투어 코스",
     desc: "이치란 · 후쿠오카 스타일 · ★4.8",
-    href: "/restaurants",
+    href: "/restaurants?region=FUKUOKA",
   },
   {
-    name: "삿포로 눈축제 코스",
-    desc: "2월 시즌 · 온천+맥주",
-    href: "/attractions?region=SAPPORO",
+    name: "오호리 공원·다자이후",
+    desc: "후쿠오카 · 산책·텐만구 당일치기",
+    href: "/attractions?region=FUKUOKA",
   },
 ] as const;

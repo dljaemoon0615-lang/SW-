@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { usePathname } from "next/navigation";
 import { MessageCircle, X } from "lucide-react";
@@ -13,21 +13,19 @@ function normalizePath(pathname: string) {
 }
 
 export function AiChatWidget() {
-  const { status } = useSession();
+  const { data: session, status } = useSession();
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const path = normalizePath(pathname);
-
-  useEffect(() => {
-    if (HIDE_ON.has(path)) setOpen(false);
-  }, [path]);
+  const canShow = !HIDE_ON.has(path);
+  const isOpen = open && canShow;
 
   if (status !== "authenticated") return null;
-  if (HIDE_ON.has(path)) return null;
+  if (!canShow) return null;
 
   return (
     <>
-      {open ? (
+      {isOpen ? (
         <button
           type="button"
           aria-label="채팅 닫기"
@@ -36,7 +34,7 @@ export function AiChatWidget() {
         />
       ) : null}
 
-      {open ? (
+      {isOpen ? (
         <div
           className="ai-chat-panel fixed bottom-24 right-4 z-[70] flex h-[min(70vh,520px)] w-[min(calc(100vw-2rem),400px)] flex-col overflow-hidden rounded-2xl border bg-white md:bottom-6 md:right-6"
           role="dialog"
@@ -62,7 +60,7 @@ export function AiChatWidget() {
             </button>
           </header>
           <div className="flex min-h-0 flex-1 flex-col px-3 pb-3 pt-2">
-            <ChatPanel variant="floating" />
+            <ChatPanel key={session?.user?.id ?? "guest"} variant="floating" />
           </div>
         </div>
       ) : null}
@@ -70,11 +68,11 @@ export function AiChatWidget() {
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        aria-label={open ? "AI 채팅 닫기" : "AI 채팅 열기"}
-        aria-expanded={open}
+        aria-label={isOpen ? "AI 채팅 닫기" : "AI 채팅 열기"}
+        aria-expanded={isOpen}
         className="ai-chat-fab fixed bottom-24 right-4 z-[80] md:bottom-6 md:right-6"
       >
-        {open ? <X size={24} strokeWidth={2.25} /> : <MessageCircle size={24} strokeWidth={2.25} />}
+        {isOpen ? <X size={24} strokeWidth={2.25} /> : <MessageCircle size={24} strokeWidth={2.25} />}
       </button>
     </>
   );

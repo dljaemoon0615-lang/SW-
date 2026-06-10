@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/shared/ui/button";
 import { Card } from "@/shared/ui/card";
+import { TripDateRangePicker } from "@/shared/ui/trip-date-range-picker";
 import { applyStayFilters } from "@/features/stays/lib/apply-stay-filters";
 import type { StaySearchResponse } from "@/features/stays/server/stays.service";
 import { JAPAN_REGIONS, type JapanRegionId } from "@/shared/lib/constants";
@@ -12,7 +13,7 @@ import type {
   AccommodationSearchRequest,
   AccommodationType,
 } from "@/server/ai/types";
-import { Calendar, CalendarCheck, Search, Sparkles, SlidersHorizontal } from "lucide-react";
+import { CalendarCheck, Search, Sparkles, SlidersHorizontal } from "lucide-react";
 import { StayCard } from "./stay-card";
 
 type SortOption = "recommended" | "price-asc" | "price-desc" | "rating-desc";
@@ -63,14 +64,15 @@ function nightsBetween(checkIn: string, checkOut: string): number {
 type StaySearchProps = {
   initialByRegion: Record<JapanRegionId, StaySearchResponse>;
   defaultSearch: Omit<AccommodationSearchRequest, "region">;
+  initialRegion?: JapanRegionId;
 };
 
-export function StaySearch({ initialByRegion, defaultSearch }: StaySearchProps) {
-  const [region, setRegion] = useState<JapanRegionId>("TOKYO");
-  const [checkIn, setCheckIn] = useState(defaultSearch.checkIn);
-  const [checkOut, setCheckOut] = useState(defaultSearch.checkOut);
-  const [guests, setGuests] = useState(defaultSearch.guests);
-  const [budgetKrw, setBudgetKrw] = useState(defaultSearch.budgetKrw);
+export function StaySearch({ initialByRegion, defaultSearch, initialRegion }: StaySearchProps) {
+  const [region, setRegion] = useState<JapanRegionId>(initialRegion ?? "TOKYO");
+  const [checkIn, setCheckIn] = useState(defaultSearch.checkIn ?? "");
+  const [checkOut, setCheckOut] = useState(defaultSearch.checkOut ?? "");
+  const [guests, setGuests] = useState(defaultSearch.guests ?? 2);
+  const [budgetKrw, setBudgetKrw] = useState(defaultSearch.budgetKrw ?? 0);
   const [types, setTypes] = useState<AccommodationType[]>(
     defaultSearch.types ?? ["HOTEL", "RYOKAN", "GUESTHOUSE"],
   );
@@ -111,7 +113,7 @@ export function StaySearch({ initialByRegion, defaultSearch }: StaySearchProps) 
 
   const display = useMemo(() => {
     const pool = livePool ?? poolsByRegion[region] ?? [];
-    return applyStayFilters(pool, { region, ...filterReq });
+    return applyStayFilters(pool, filterReq);
   }, [livePool, poolsByRegion, region, filterReq]);
 
   const { items, recommended, areas } = display;
@@ -192,7 +194,7 @@ export function StaySearch({ initialByRegion, defaultSearch }: StaySearchProps) 
       {trips.length > 0 ? (
         <Card className="space-y-3">
           <div className="flex items-center gap-2">
-            <CalendarCheck size={16} className="text-rose-500" />
+            <CalendarCheck size={16} className="text-brand" />
             <p className="text-sm font-medium text-slate-700">내 일정에서 가져오기</p>
           </div>
           <div className="flex gap-2 overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
@@ -205,8 +207,8 @@ export function StaySearch({ initialByRegion, defaultSearch }: StaySearchProps) 
                   onClick={() => applyTrip(trip)}
                   className={`shrink-0 rounded-xl border px-3 py-2 text-left text-xs transition ${
                     selected
-                      ? "border-rose-500 bg-rose-50 text-rose-700"
-                      : "border-slate-200 bg-white text-slate-600 hover:border-rose-200"
+                      ? "border-brand bg-[var(--primary-light)] text-[var(--dark)]"
+                      : "border-slate-200 bg-white text-slate-600 hover:border-brand/30"
                   }`}
                 >
                   <p className="font-semibold">{trip.title}</p>
@@ -225,7 +227,7 @@ export function StaySearch({ initialByRegion, defaultSearch }: StaySearchProps) 
         </Card>
       ) : null}
 
-      <Card className="space-y-3">
+      <Card className="relative z-20 space-y-3 overflow-visible">
         <select
           value={region}
           onChange={(e) => onRegionChange(e.target.value as JapanRegionId)}
@@ -238,26 +240,14 @@ export function StaySearch({ initialByRegion, defaultSearch }: StaySearchProps) 
           ))}
         </select>
 
-        <div className="grid grid-cols-2 gap-2">
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-2 py-2 text-xs text-slate-500">
-            <Calendar size={14} />
-            <input
-              type="date"
-              value={checkIn}
-              onChange={(e) => setCheckIn(e.target.value)}
-              className="w-full bg-transparent text-sm text-slate-800 outline-none"
-            />
-          </label>
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 px-2 py-2 text-xs text-slate-500">
-            <Calendar size={14} />
-            <input
-              type="date"
-              value={checkOut}
-              onChange={(e) => setCheckOut(e.target.value)}
-              className="w-full bg-transparent text-sm text-slate-800 outline-none"
-            />
-          </label>
-        </div>
+        <TripDateRangePicker
+          value={{ startDate: checkIn, endDate: checkOut }}
+          onChange={(range) => {
+            setCheckIn(range.startDate);
+            setCheckOut(range.endDate);
+          }}
+          label="체크인 · 체크아웃"
+        />
 
         <div className="grid grid-cols-2 gap-2">
           <label className="rounded-xl border border-slate-200 px-3 py-2">
@@ -293,7 +283,7 @@ export function StaySearch({ initialByRegion, defaultSearch }: StaySearchProps) 
                 onClick={() => toggleType(t.id)}
                 className={`rounded-full px-3 py-1 text-xs transition ${
                   types.includes(t.id)
-                    ? "bg-rose-600 text-white"
+                    ? "bg-brand text-white"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
               >
@@ -385,7 +375,7 @@ export function StaySearch({ initialByRegion, defaultSearch }: StaySearchProps) 
           {recommended.length > 0 ? (
             <section className="space-y-2">
               <div className="flex items-center gap-1.5 px-1">
-                <Sparkles size={14} className="text-rose-500" />
+                <Sparkles size={14} className="text-brand" />
                 <h2 className="text-sm font-semibold text-slate-800">
                   AI 추천 TOP {recommended.length}
                 </h2>

@@ -90,7 +90,7 @@ export function AttractionRatingSection({ attraction, variant = "default" }: Pro
           <h3
             className={`flex items-center gap-1.5 text-sm font-semibold ${textMain}`}
           >
-            <MessageSquareQuote size={16} className="text-rose-500" />
+            <MessageSquareQuote size={16} className="text-brand" />
             여행자 리뷰
             <span className={`font-normal ${textMuted}`}>
               ({Math.min(reviews.length, 3)}건 미리보기)
@@ -105,7 +105,7 @@ export function AttractionRatingSection({ attraction, variant = "default" }: Pro
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span
-                      className="flex h-8 w-8 items-center justify-center rounded-full bg-rose-100 text-xs font-bold text-rose-700"
+                      className="flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary-light)] text-xs font-bold text-brand"
                       aria-hidden
                     >
                       {review.author.charAt(0)}

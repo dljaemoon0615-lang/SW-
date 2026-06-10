@@ -38,7 +38,7 @@ export function StayCard({ stay, nights = 1, recommended = false }: Props) {
   return (
     <article
       className={`group overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:shadow-md ${
-        recommended ? "border-rose-300 ring-1 ring-rose-200" : "border-slate-200/80"
+        recommended ? "border-brand/40 ring-1 ring-brand/20" : "border-slate-200/80"
       }`}
     >
       <div className="relative aspect-[16/10] w-full">
@@ -59,7 +59,7 @@ export function StayCard({ stay, nights = 1, recommended = false }: Props) {
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/65 via-black/10 to-transparent" />
 
         {recommended ? (
-          <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-rose-500 px-2.5 py-0.5 text-[11px] font-semibold text-white shadow">
+          <span className="absolute left-3 top-3 inline-flex items-center gap-1 rounded-full bg-brand px-2.5 py-0.5 text-[11px] font-semibold text-white shadow">
             <Sparkles size={12} />
             AI 추천
           </span>
@@ -117,7 +117,7 @@ export function StayCard({ stay, nights = 1, recommended = false }: Props) {
         ) : null}
 
         {stay.recommendReason ? (
-          <p className="rounded-lg bg-rose-50 px-2.5 py-1.5 text-[11px] font-medium text-rose-700">
+          <p className="rounded-lg bg-[var(--primary-light)] px-2.5 py-1.5 text-[11px] font-medium text-[var(--dark)]">
             {stay.recommendReason}
           </p>
         ) : null}
@@ -131,7 +131,7 @@ export function StayCard({ stay, nights = 1, recommended = false }: Props) {
                 <span className="ml-1 text-xs font-normal text-slate-500">({nights}박)</span>
               </p>
             ) : (
-              <p className="text-base font-bold text-rose-600">
+              <p className="text-base font-bold text-brand">
                 {stay.priceKrw.toLocaleString()}원
               </p>
             )}
@@ -140,7 +140,7 @@ export function StayCard({ stay, nights = 1, recommended = false }: Props) {
             href={stay.bookingUrl}
             target="_blank"
             rel="noreferrer"
-            className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-rose-700"
+            className="btn-primary inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium"
           >
             예약
             <ExternalLink size={12} />

@@ -13,14 +13,20 @@ type Props = {
 };
 
 export function RestaurantDetailModal({ restaurant, onClose }: Props) {
+  if (!restaurant) return null;
+  return <RestaurantDetailModalBody key={restaurant.id} restaurant={restaurant} onClose={onClose} />;
+}
+
+function RestaurantDetailModalBody({
+  restaurant,
+  onClose,
+}: {
+  restaurant: RestaurantResult;
+  onClose: () => void;
+}) {
   const [lightbox, setLightbox] = useState(false);
 
   useEffect(() => {
-    setLightbox(false);
-  }, [restaurant?.id]);
-
-  useEffect(() => {
-    if (!restaurant) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (lightbox) {
@@ -35,9 +41,7 @@ export function RestaurantDetailModal({ restaurant, onClose }: Props) {
       document.body.style.overflow = "";
       window.removeEventListener("keydown", onKey);
     };
-  }, [restaurant, onClose, lightbox]);
-
-  if (!restaurant) return null;
+  }, [onClose, lightbox, restaurant.address, restaurant.name]);
 
   const mapsUrl = restaurant.address
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(restaurant.address)}`
@@ -115,7 +119,7 @@ export function RestaurantDetailModal({ restaurant, onClose }: Props) {
 
           <div className="mt-4 grid gap-2 rounded-xl bg-slate-50 p-3 text-sm text-slate-700">
             <p className="flex items-center gap-2">
-              <Wallet size={16} className="shrink-0 text-rose-500" />
+              <Wallet size={16} className="shrink-0 text-brand" />
               예상 1인 {restaurant.avgPriceKrw.toLocaleString()}원
             </p>
             <p className="flex items-center gap-2">
@@ -137,14 +141,14 @@ export function RestaurantDetailModal({ restaurant, onClose }: Props) {
           {restaurant.menuItems?.length ? (
             <div className="mt-4">
               <h3 className="flex items-center gap-1.5 text-sm font-semibold text-slate-900">
-                <UtensilsCrossed size={16} className="text-rose-500" />
+                <UtensilsCrossed size={16} className="text-brand" />
                 대표 메뉴
               </h3>
               <div className="mt-2 flex flex-wrap gap-2">
                 {restaurant.menuItems.map((item) => (
                   <span
                     key={item}
-                    className="rounded-full border border-rose-100 bg-rose-50 px-3 py-1 text-sm font-medium text-rose-900"
+                    className="rounded-full border border-brand/20 bg-[var(--primary-light)] px-3 py-1 text-sm font-medium text-[var(--dark)]"
                   >
                     {item}
                   </span>
@@ -174,7 +178,7 @@ export function RestaurantDetailModal({ restaurant, onClose }: Props) {
               href={mapsUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex flex-1 items-center justify-center gap-2 rounded-xl bg-rose-500 px-4 py-2.5 text-sm font-medium text-white transition hover:bg-rose-600"
+              className="btn-primary inline-flex flex-1 items-center justify-center gap-2 px-4 py-2.5 text-sm font-medium"
             >
               <MapPin size={16} />
               지도에서 보기

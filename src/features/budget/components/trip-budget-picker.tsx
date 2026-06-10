@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { format } from "date-fns";
 
 export type TripBudgetOption = {
@@ -27,7 +28,15 @@ export function TripBudgetPicker({ trips, selectedId, onSelect }: Props) {
     return (
       <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/80 px-4 py-8 text-center">
         <p className="text-sm font-medium text-slate-600">저장된 일정이 없습니다</p>
-        <p className="mt-1 text-xs text-slate-500">내 일정에서 여행을 저장한 뒤 예산을 연결할 수 있어요.</p>
+        <p className="mt-1 text-xs text-slate-500">
+          플래너에서 일정을 만든 뒤 저장하면 예산을 연결할 수 있어요.
+        </p>
+        <Link
+          href="/planner?region=FUKUOKA&budgetKrw=1000000"
+          className="mt-4 inline-block rounded-full bg-brand px-4 py-2 text-sm font-medium text-white"
+        >
+          후쿠오카 일정 만들기
+        </Link>
       </div>
     );
   }
@@ -47,8 +56,8 @@ export function TripBudgetPicker({ trips, selectedId, onSelect }: Props) {
               onClick={() => onSelect(trip.id)}
               className={`group relative w-[min(100%,280px)] shrink-0 overflow-hidden rounded-2xl border-2 text-left transition ${
                 selected
-                  ? "border-rose-500 shadow-md ring-2 ring-rose-200"
-                  : "border-slate-200/80 hover:border-rose-200 hover:shadow-sm"
+                  ? "border-brand shadow-md ring-2 ring-brand/20"
+                  : "border-slate-200/80 hover:border-brand/30 hover:shadow-sm"
               }`}
             >
               <div className="relative aspect-[4/3] w-full">
@@ -61,7 +70,7 @@ export function TripBudgetPicker({ trips, selectedId, onSelect }: Props) {
                 />
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent" />
                 {selected ? (
-                  <span className="absolute left-3 top-3 rounded-full bg-rose-500 px-2.5 py-0.5 text-xs font-semibold text-white shadow">
+                  <span className="absolute left-3 top-3 rounded-full bg-brand px-2.5 py-0.5 text-xs font-semibold text-white shadow">
                     선택됨
                   </span>
                 ) : null}

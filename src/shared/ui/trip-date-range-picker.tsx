@@ -19,7 +19,15 @@ import {
 } from "date-fns";
 import { ko } from "date-fns/locale";
 import { Calendar, ChevronLeft, ChevronRight } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useId,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
+import { createPortal } from "react-dom";
 import {
   formatTripDuration,
   formatTripRangeDetail,
@@ -36,6 +44,7 @@ type Props = {
 };
 
 const WEEKDAYS = ["일", "월", "화", "수", "목", "금", "토"];
+const PANEL_HEIGHT_ESTIMATE = 420;
 
 export function TripDateRangePicker({
   value,
@@ -46,7 +55,10 @@ export function TripDateRangePicker({
 }: Props) {
   const id = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
   const [open, setOpen] = useState(false);
+  const [panelStyle, setPanelStyle] = useState<CSSProperties>({});
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(parseISO(value.startDate)));
   const [draftStart, setDraftStart] = useState<string | null>(null);
 
@@ -54,21 +66,52 @@ export function TripDateRangePicker({
   const end = parseISO(value.endDate);
   const durationLabel = formatTripDuration(value.startDate, value.endDate);
 
-  useEffect(() => {
-    if (!open) return;
-    function onPointerDown(e: MouseEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", onPointerDown);
-    return () => document.removeEventListener("mousedown", onPointerDown);
-  }, [open]);
+  const updatePanelPosition = useCallback(() => {
+    const trigger = triggerRef.current;
+    if (!trigger) return;
+
+    const rect = trigger.getBoundingClientRect();
+    const width = Math.min(340, window.innerWidth - 32);
+    let left =
+      variant === "hero"
+        ? rect.left + rect.width / 2 - width / 2
+        : rect.left;
+    left = Math.max(16, Math.min(left, window.innerWidth - width - 16));
+
+    const belowTop = rect.bottom + 8;
+    const aboveTop = rect.top - PANEL_HEIGHT_ESTIMATE - 8;
+    const fitsBelow = belowTop + PANEL_HEIGHT_ESTIMATE <= window.innerHeight - 16;
+    const top = fitsBelow ? belowTop : Math.max(16, aboveTop);
+
+    setPanelStyle({
+      position: "fixed",
+      top,
+      left,
+      width,
+      zIndex: 100,
+    });
+  }, [variant]);
 
   useEffect(() => {
-    if (open) {
-      setViewMonth(startOfMonth(parseISO(value.startDate)));
-      setDraftStart(null);
+    if (!open) return;
+
+    updatePanelPosition();
+    window.addEventListener("scroll", updatePanelPosition, true);
+    window.addEventListener("resize", updatePanelPosition);
+
+    function onPointerDown(e: MouseEvent) {
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target) || panelRef.current?.contains(target)) return;
+      setOpen(false);
     }
-  }, [open, value.startDate]);
+
+    document.addEventListener("mousedown", onPointerDown);
+    return () => {
+      window.removeEventListener("scroll", updatePanelPosition, true);
+      window.removeEventListener("resize", updatePanelPosition);
+      document.removeEventListener("mousedown", onPointerDown);
+    };
+  }, [open, updatePanelPosition]);
 
   function isDisabled(day: Date) {
     return isBefore(day, minDate);
@@ -124,19 +167,103 @@ export function TripDateRangePicker({
       ? "w-full text-left outline-none"
       : "w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-left text-sm text-slate-800";
 
+  const panel = open ? (
+    <div
+      ref={panelRef}
+      role="dialog"
+      aria-label="여행 날짜 선택"
+      style={panelStyle}
+      className="trip-date-picker-panel rounded-2xl border border-slate-200 bg-white p-4 shadow-xl"
+    >
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setViewMonth((m) => subMonths(m, 1))}
+          className="rounded-lg p-1.5 hover:bg-slate-100"
+          aria-label="이전 달"
+        >
+          <ChevronLeft size={20} />
+        </button>
+        <p className="text-sm font-bold text-slate-800">
+          {format(viewMonth, "yyyy년 M월", { locale: ko })}
+        </p>
+        <button
+          type="button"
+          onClick={() => setViewMonth((m) => addMonths(m, 1))}
+          className="rounded-lg p-1.5 hover:bg-slate-100"
+          aria-label="다음 달"
+        >
+          <ChevronRight size={20} />
+        </button>
+      </div>
+
+      <p className="mb-3 text-center text-xs text-slate-500">
+        {draftStart ? "체크아웃 날짜를 선택하세요" : "체크인 날짜를 선택하세요"}
+      </p>
+
+      <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-slate-400">
+        {WEEKDAYS.map((d) => (
+          <span key={d}>{d}</span>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((day) => {
+          const inMonth = isSameMonth(day, viewMonth);
+          const disabled = isDisabled(day);
+          const selected = isRangeEdge(day);
+          const inRange = isInRange(day) && !selected;
+
+          return (
+            <button
+              key={day.toISOString()}
+              type="button"
+              disabled={disabled}
+              onClick={() => onDayClick(day)}
+              className={[
+                "h-9 rounded-lg text-sm transition",
+                !inMonth && "text-slate-300",
+                disabled && "cursor-not-allowed opacity-30",
+                inRange && "bg-[var(--primary-light)] text-[var(--primary)]",
+                selected && "bg-[var(--primary)] font-bold text-white",
+                !selected && !inRange && !disabled && inMonth && "hover:bg-slate-100",
+              ]
+                .filter(Boolean)
+                .join(" ")}
+            >
+              {format(day, "d")}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2.5 text-center">
+        <p className="text-sm font-bold text-[var(--primary)]">{durationLabel}</p>
+        <p className="mt-0.5 text-xs text-slate-600">
+          {draftStart
+            ? `${format(parseISO(draftStart), "M.d", { locale: ko })} – 체크아웃 선택`
+            : formatTripRangeDetail(value.startDate, value.endDate)}
+        </p>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <div ref={rootRef} className="relative w-full">
       <label htmlFor={id} className={variant === "hero" ? undefined : "mb-1 block text-sm font-medium"}>
-        {variant === "hero" ? (
-          <span className="sb-label">{label}</span>
-        ) : (
-          label
-        )}
+        {variant === "hero" ? <span className="sb-label">{label}</span> : label}
       </label>
       <button
+        ref={triggerRef}
         id={id}
         type="button"
-        onClick={() => setOpen((o) => !o)}
+        onClick={() => {
+          if (!open) {
+            setViewMonth(startOfMonth(parseISO(value.startDate)));
+            setDraftStart(null);
+          }
+          setOpen((o) => !o);
+        }}
         className={`${triggerClass} flex items-center gap-2`}
         aria-expanded={open}
         aria-haspopup="dialog"
@@ -154,90 +281,7 @@ export function TripDateRangePicker({
         </span>
       </button>
 
-      {open ? (
-        <div
-          role="dialog"
-          aria-label="여행 날짜 선택"
-          className={`trip-date-picker-panel z-50 ${
-            variant === "hero"
-              ? "left-1/2 mt-2 w-[min(100vw-2rem,340px)] -translate-x-1/2 sm:left-0 sm:translate-x-0"
-              : "left-0 mt-2 w-full min-w-[300px] sm:w-[340px]"
-          } absolute top-full rounded-2xl border border-slate-200 bg-white p-4 shadow-xl`}
-        >
-          <div className="mb-3 flex items-center justify-between gap-2">
-            <button
-              type="button"
-              onClick={() => setViewMonth((m) => subMonths(m, 1))}
-              className="rounded-lg p-1.5 hover:bg-slate-100"
-              aria-label="이전 달"
-            >
-              <ChevronLeft size={20} />
-            </button>
-            <p className="text-sm font-bold text-slate-800">
-              {format(viewMonth, "yyyy년 M월", { locale: ko })}
-            </p>
-            <button
-              type="button"
-              onClick={() => setViewMonth((m) => addMonths(m, 1))}
-              className="rounded-lg p-1.5 hover:bg-slate-100"
-              aria-label="다음 달"
-            >
-              <ChevronRight size={20} />
-            </button>
-          </div>
-
-          <p className="mb-3 text-center text-xs text-slate-500">
-            {draftStart
-              ? "체크아웃 날짜를 선택하세요"
-              : "체크인 날짜를 선택하세요"}
-          </p>
-
-          <div className="mb-2 grid grid-cols-7 gap-1 text-center text-[11px] font-medium text-slate-400">
-            {WEEKDAYS.map((d) => (
-              <span key={d}>{d}</span>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-7 gap-1">
-            {days.map((day) => {
-              const inMonth = isSameMonth(day, viewMonth);
-              const disabled = isDisabled(day);
-              const selected = isRangeEdge(day);
-              const inRange = isInRange(day) && !selected;
-
-              return (
-                <button
-                  key={day.toISOString()}
-                  type="button"
-                  disabled={disabled}
-                  onClick={() => onDayClick(day)}
-                  className={[
-                    "h-9 rounded-lg text-sm transition",
-                    !inMonth && "text-slate-300",
-                    disabled && "cursor-not-allowed opacity-30",
-                    inRange && "bg-[var(--primary-light)] text-[var(--primary)]",
-                    selected && "bg-[var(--primary)] font-bold text-white",
-                    !selected && !inRange && !disabled && inMonth && "hover:bg-slate-100",
-                  ]
-                    .filter(Boolean)
-                    .join(" ")}
-                >
-                  {format(day, "d")}
-                </button>
-              );
-            })}
-          </div>
-
-          <div className="mt-4 rounded-xl bg-slate-50 px-3 py-2.5 text-center">
-            <p className="text-sm font-bold text-[var(--primary)]">{durationLabel}</p>
-            <p className="mt-0.5 text-xs text-slate-600">
-              {draftStart
-                ? `${format(parseISO(draftStart), "M.d", { locale: ko })} – 체크아웃 선택`
-                : formatTripRangeDetail(value.startDate, value.endDate)}
-            </p>
-          </div>
-        </div>
-      ) : null}
+      {typeof document !== "undefined" && panel ? createPortal(panel, document.body) : null}
     </div>
   );
 }

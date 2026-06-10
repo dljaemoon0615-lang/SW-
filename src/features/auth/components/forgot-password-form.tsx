@@ -84,7 +84,7 @@ export function ForgotPasswordForm() {
         </Button>
       </form>
       <p className="text-center text-sm">
-        <Link href="/login" className="text-rose-600">
+        <Link href="/login" className="text-brand">
           로그인으로 돌아가기
         </Link>
       </p>

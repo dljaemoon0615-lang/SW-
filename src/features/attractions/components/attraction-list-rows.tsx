@@ -35,7 +35,7 @@ export function AttractionListRows({ items, selectedId, onSelect }: Props) {
               type="button"
               onClick={() => onSelect(a)}
               className={`flex w-full gap-3 px-2 py-3 text-left transition hover:bg-slate-50 ${
-                selected ? "bg-rose-50/80 ring-1 ring-inset ring-rose-200" : ""
+                selected ? "bg-[var(--primary-light)] ring-1 ring-inset ring-brand/30" : ""
               }`}
             >
               <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-slate-800 text-[11px] font-bold text-white">

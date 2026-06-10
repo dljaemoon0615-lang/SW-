@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { PLANNER_TIMELINE } from "@/features/home/lib/home-data";
+import { HomePreviewMap } from "./home-preview-map";
 
 export function PlannerPreviewSection() {
   return (
@@ -24,7 +25,7 @@ export function PlannerPreviewSection() {
             나만의 일정 만들기 →
           </Link>
         </div>
-        <div className="map-mockup">🗺️ 지도 연동 영역 (준비 중)</div>
+        <HomePreviewMap />
       </div>
     </section>
   );

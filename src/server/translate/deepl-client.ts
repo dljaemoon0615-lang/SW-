@@ -3,9 +3,14 @@
  * https://www.deepl.com/pro-api
  *
  * .env: DEEPL_API_KEY=xxxxxxxx:fx
+ * DEEPL_SKIP=1 — API 호출 완전 비활성 (프리로드·사전만 사용)
  *
  * source_lang 을 생략하면 DeepL이 원문 언어를 자동 감지합니다 (JA/EN 혼합 배치 가능).
  */
+
+import { isPredominantlyKorean } from "./localize-text";
+import { lookupPreloadedKo } from "./preloaded-ko";
+import { isMyMemoryEnabled, translateMyMemoryBatch } from "./mymemory-client";
 
 const DEEPL_FREE = "https://api-free.deepl.com/v2/translate";
 const DEEPL_PRO = "https://api.deepl.com/v2/translate";
@@ -14,6 +19,19 @@ const CACHE_TTL_MS = 24 * 60 * 60 * 1000;
 
 type CacheEntry = { value: string; expires: number };
 const memoryCache = new Map<string, CacheEntry>();
+
+/** DeepL 456(한도 초과) 감지 시 세션 동안 API 스킵 */
+let quotaExceeded = false;
+
+export function isDeepLQuotaExceeded(): boolean {
+  return quotaExceeded;
+}
+
+function shouldSkipDeepLApi(): boolean {
+  if (process.env.DEEPL_SKIP === "1") return true;
+  if (quotaExceeded) return true;
+  return false;
+}
 
 function deeplEndpoint(apiKey: string): string {
   if (process.env.DEEPL_API_URL) return process.env.DEEPL_API_URL;
@@ -79,7 +97,13 @@ async function callDeepLChunk(
     });
 
     if (!res.ok) {
-      console.warn("[deepl] translate failed", res.status, await res.text().catch(() => ""));
+      const body = await res.text().catch(() => "");
+      if (res.status === 456 || body.includes("Quota exceeded")) {
+        quotaExceeded = true;
+        console.warn("[deepl] quota exceeded — preloaded/dictionary translations only");
+      } else {
+        console.warn("[deepl] translate failed", res.status, body);
+      }
       return null;
     }
 
@@ -102,13 +126,20 @@ export async function translateToKoBatch(
 ): Promise<Map<string, string>> {
   const result = new Map<string, string>();
   const apiKey = process.env.DEEPL_API_KEY?.trim();
-  if (!apiKey) return result;
+  const skipApi = shouldSkipDeepLApi();
 
   const unique = [...new Set(texts.map((t) => t.trim()).filter(Boolean))];
   const pending: string[] = [];
 
   for (const text of unique) {
-    if (!needsTranslation(text)) continue;
+    if (!needsTranslation(text) || isPredominantlyKorean(text)) continue;
+
+    const preloaded = lookupPreloadedKo(text);
+    if (preloaded) {
+      result.set(text, preloaded);
+      continue;
+    }
+
     const cached = getCached(text);
     if (cached) {
       result.set(text, cached);
@@ -117,16 +148,28 @@ export async function translateToKoBatch(
     pending.push(text);
   }
 
-  for (let i = 0; i < pending.length; i += CHUNK_SIZE) {
-    const chunk = pending.slice(i, i + CHUNK_SIZE);
-    const translated = await callDeepLChunk(chunk, apiKey);
-    if (!translated) continue;
-    chunk.forEach((orig, idx) => {
-      const value = translated[idx];
-      if (!value) return;
+  if (apiKey && !skipApi && pending.length > 0) {
+    for (let i = 0; i < pending.length; i += CHUNK_SIZE) {
+      if (shouldSkipDeepLApi()) break;
+      const chunk = pending.slice(i, i + CHUNK_SIZE);
+      const translated = await callDeepLChunk(chunk, apiKey);
+      if (!translated) continue;
+      chunk.forEach((orig, idx) => {
+        const value = translated[idx];
+        if (!value) return;
+        result.set(orig, value);
+        setCached(orig, value);
+      });
+    }
+  }
+
+  const stillPending = pending.filter((t) => !result.has(t));
+  if (stillPending.length > 0 && isMyMemoryEnabled()) {
+    const fromMemory = await translateMyMemoryBatch(stillPending);
+    for (const [orig, value] of fromMemory) {
       result.set(orig, value);
       setCached(orig, value);
-    });
+    }
   }
 
   return result;

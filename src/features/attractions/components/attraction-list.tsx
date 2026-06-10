@@ -6,6 +6,9 @@ import Image from "next/image";
 import { useSearchParams } from "next/navigation";
 import { Badge } from "@/shared/ui/badge";
 import { JAPAN_REGIONS, type JapanRegionId } from "@/shared/lib/constants";
+import { enrichAttractionsWithRatings } from "@/features/attractions/data/attraction-ratings";
+import { isAttractionCatalogStale } from "@/features/attractions/lib/catalog-ready";
+import { sortAttractionsByRating } from "@/features/attractions/lib/sort-attractions";
 import type { AttractionResult } from "@/server/ai/types";
 import { AttractionDetailModal } from "@/features/attractions/components/attraction-detail-modal";
 import { AttractionListRows } from "@/features/attractions/components/attraction-list-rows";
@@ -51,11 +54,23 @@ const CATEGORY_LABEL: Record<string, string> = {
   historic_tomb: "고분",
 };
 
+function prepareRegionCatalog(
+  initial: Record<JapanRegionId, AttractionResult[]>,
+): Record<JapanRegionId, AttractionResult[]> {
+  const out = {} as Record<JapanRegionId, AttractionResult[]>;
+  for (const r of JAPAN_REGIONS) {
+    out[r.id] = sortAttractionsByRating(enrichAttractionsWithRatings(initial[r.id] ?? []));
+  }
+  return out;
+}
+
 function AttractionCard({
   attraction,
+  rank,
   onSelect,
 }: {
   attraction: AttractionResult;
+  rank?: number;
   onSelect: () => void;
 }) {
   const photos =
@@ -78,7 +93,7 @@ function AttractionCard({
     <button
       type="button"
       onClick={onSelect}
-      className="group w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-white text-left shadow-sm transition hover:scale-[1.01] hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-rose-400"
+      className="group w-full overflow-hidden rounded-2xl border border-slate-200/80 bg-white text-left shadow-sm transition hover:scale-[1.01] hover:shadow-md focus:outline-none focus-visible:ring-2 focus-visible:ring-brand/50"
     >
       <div className="relative cursor-zoom-in">
         {photos.length > 0 ? (
@@ -114,8 +129,15 @@ function AttractionCard({
         </span>
 
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-black/75 via-black/15 to-transparent" />
+        {rank != null ? (
+          <span className="pointer-events-none absolute left-3 top-3 z-10 flex h-7 min-w-7 items-center justify-center rounded-full bg-slate-900/90 px-1.5 text-[11px] font-bold text-white shadow">
+            {rank}
+          </span>
+        ) : null}
         {attraction.category ? (
-          <span className="pointer-events-none absolute left-3 top-3 rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm">
+          <span
+            className={`pointer-events-none absolute rounded-full bg-white/90 px-2.5 py-1 text-[11px] font-semibold text-slate-700 shadow-sm ${rank != null ? "left-12 top-3" : "left-3 top-3"}`}
+          >
             {CATEGORY_LABEL[attraction.category] ?? attraction.category}
           </span>
         ) : null}
@@ -150,7 +172,7 @@ function AttractionCard({
         <div className="flex flex-wrap gap-3 text-xs text-slate-600">
           {attraction.fee ? (
             <span className="inline-flex items-center gap-1">
-              <Ticket size={13} className="text-rose-500" />
+              <Ticket size={13} className="text-brand" />
               {attraction.fee}
             </span>
           ) : null}
@@ -194,17 +216,57 @@ export function AttractionList({ initialByRegion }: AttractionListProps) {
       ? regionParam
       : "OSAKA_KYOTO";
 
-  const [region, setRegion] = useState<JapanRegionId>(initialRegion);
+  const [byRegion, setByRegion] = useState(() => prepareRegionCatalog(initialByRegion));
+  const [pickedRegion, setPickedRegion] = useState<JapanRegionId>(initialRegion);
+  const region = regionParam && JAPAN_REGIONS.some((r) => r.id === regionParam) ? regionParam : pickedRegion;
   const [selected, setSelected] = useState<AttractionResult | null>(null);
   const [view, setView] = useState<ViewMode>("split");
+  const [warming, setWarming] = useState(() =>
+    JAPAN_REGIONS.some((r) => isAttractionCatalogStale(initialByRegion[r.id] ?? [])),
+  );
 
   useEffect(() => {
-    if (regionParam && JAPAN_REGIONS.some((r) => r.id === regionParam)) {
-      setRegion(regionParam);
-    }
-  }, [regionParam]);
+    let cancelled = false;
 
-  const items = initialByRegion[region] ?? [];
+    async function fetchRegion(target: JapanRegionId) {
+      const res = await fetch(`/api/ai/attractions?region=${target}&preload=1`, {
+        cache: "no-store",
+      });
+      const d = await res.json();
+      const next = (d.attractions ?? d.items) as AttractionResult[] | undefined;
+      if (!Array.isArray(next) || next.length === 0) return;
+      setByRegion((prev) => ({
+        ...prev,
+        [target]: sortAttractionsByRating(next),
+      }));
+    }
+
+    void (async () => {
+      const staleRegions = JAPAN_REGIONS.filter((r) =>
+        isAttractionCatalogStale(initialByRegion[r.id] ?? []),
+      );
+      if (staleRegions.length === 0) {
+        setWarming(false);
+        return;
+      }
+
+      try {
+        await Promise.all(staleRegions.map((r) => fetchRegion(r.id)));
+      } catch {
+        /* ignore */
+      } finally {
+        if (!cancelled) setWarming(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialByRegion]);
+
+  const upgrading = warming || isAttractionCatalogStale(byRegion[region] ?? []);
+
+  const items = sortAttractionsByRating(byRegion[region] ?? []);
   const selectedId = selected?.id ?? null;
 
   function handleSelect(a: AttractionResult) {
@@ -223,7 +285,7 @@ export function AttractionList({ initialByRegion }: AttractionListProps) {
         <select
           value={region}
           onChange={(e) => {
-            setRegion(e.target.value as JapanRegionId);
+            setPickedRegion(e.target.value as JapanRegionId);
             setSelected(null);
           }}
           className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm shadow-sm sm:max-w-xs"
@@ -242,7 +304,7 @@ export function AttractionList({ initialByRegion }: AttractionListProps) {
               type="button"
               onClick={() => setView(id)}
               className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition sm:flex-none sm:text-sm ${
-                view === id ? "bg-rose-600 text-white" : "text-slate-600 hover:bg-slate-50"
+                view === id ? "bg-brand text-white" : "text-slate-600 hover:bg-slate-50"
               }`}
             >
               <Icon size={15} />
@@ -253,16 +315,23 @@ export function AttractionList({ initialByRegion }: AttractionListProps) {
       </div>
 
       <p className="text-xs text-slate-500">
-        {items.length}곳 추출 · 지도 마커 또는 리스트 항목을 누르면 상세 정보를 볼 수 있습니다.
+        {items.length}곳 · Google Places 실평점순 (1번이 최고 평점)
+        {upgrading ? (
+          <span className="ml-2 text-[var(--primary)]">Google Places 불러오는 중…</span>
+        ) : null}
       </p>
 
       {items.length === 0 ? (
         <p className="py-12 text-center text-sm text-slate-500">이 지역 관광지가 없습니다.</p>
       ) : view === "list" ? (
         <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {items.map((a) => (
+          {items.map((a, index) => (
             <li key={a.id}>
-              <AttractionCard attraction={a} onSelect={() => handleSelect(a)} />
+              <AttractionCard
+                rank={index + 1}
+                attraction={a}
+                onSelect={() => handleSelect(a)}
+              />
             </li>
           ))}
         </ul>

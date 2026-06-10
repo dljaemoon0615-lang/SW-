@@ -86,10 +86,10 @@ export function TripItineraryEditor({ tripId, region, days: initialDays }: Props
 
   return (
     <section className="space-y-4">
-      <Card className="border-rose-100 bg-gradient-to-br from-rose-50/80 to-white">
+      <Card className="border-brand/20 bg-gradient-to-br from-[var(--primary-light)] to-white">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
-            <p className="flex items-center gap-1.5 text-sm font-semibold text-rose-800">
+            <p className="flex items-center gap-1.5 text-sm font-semibold text-[var(--dark)]">
               <GripVertical size={16} />
               일정 편집
             </p>

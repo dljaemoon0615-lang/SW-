@@ -74,7 +74,19 @@ export function BudgetPanel() {
       const list: TripBudgetOption[] = tripsData.trips ?? [];
       setTrips(list);
 
-      if (list.length > 0) {
+      if (list.length === 0) {
+        const suggestRes = await fetch("/api/budget/suggest", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ totalKrw: 1_000_000 }),
+        });
+        if (!cancelled && suggestRes.ok) {
+          const suggestData = await suggestRes.json();
+          setTotalKrw(suggestData.totalKrw ?? 1_000_000);
+          if (suggestData.allocations) setAllocations(suggestData.allocations);
+          setSuggestHint("일정 저장 전 미리보기 · 기본 비율로 100만원을 배분했습니다.");
+        }
+      } else if (list.length > 0) {
         setSelectedTripId(list[0].id);
         const res = await fetch(`/api/budget?tripId=${list[0].id}`);
         if (cancelled) return;
@@ -144,14 +156,74 @@ export function BudgetPanel() {
       <TripBudgetPicker trips={trips} selectedId={selectedTripId} onSelect={selectTrip} />
 
       {!selectedTripId ? (
-        <Card>
-          <p className="text-sm text-slate-500">예산을 설정할 여행을 선택해 주세요.</p>
-        </Card>
+        <>
+          <Card className="text-sm text-slate-600">
+            저장된 일정이 없어도 예산 배분을 미리 볼 수 있습니다. 일정을 저장하면 예산도 함께
+            연결·저장됩니다.
+          </Card>
+          {rate ? (
+            <Card className="text-sm text-slate-600">
+              환율 1원 ≈ {rate.krwToJpy.toFixed(4)}엔 ({rate.source === "api" ? "실시간" : "기본값"})
+            </Card>
+          ) : null}
+          <Card className="space-y-2">
+            <label className="text-sm font-medium">총 예산 (원)</label>
+            <input
+              type="number"
+              value={totalKrw || ""}
+              onChange={(e) => setTotalKrw(Number(e.target.value))}
+              className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+            />
+            <div className="flex flex-wrap gap-2">
+              {[1_000_000, 1_500_000, 2_000_000].map((preset) => (
+                <Button
+                  key={preset}
+                  type="button"
+                  variant="outline"
+                  onClick={async () => {
+                    setTotalKrw(preset);
+                    const res = await fetch("/api/budget/suggest", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ totalKrw: preset }),
+                    });
+                    const data = await res.json();
+                    if (data.allocations) setAllocations(data.allocations);
+                    setSuggestHint(`${preset.toLocaleString()}원 기준 기본 배분입니다.`);
+                  }}
+                >
+                  {preset / 10_000}만원
+                </Button>
+              ))}
+            </div>
+            {suggestHint ? <p className="text-xs text-slate-500">{suggestHint}</p> : null}
+          </Card>
+          <Card>
+            <p className="text-2xl font-bold text-brand">{remaining.toLocaleString()}원 남음</p>
+            <p className="text-xs text-slate-500">지출 {spent.toLocaleString()}원 / 총 {totalKrw.toLocaleString()}원</p>
+            <div className="mt-3 space-y-3">
+              {BUDGET_CATEGORIES.map((cat) => {
+                const row = allocations.find((a) => a.category === cat.id);
+                const amount = row?.amountKrw ?? 0;
+                const pct = totalKrw > 0 ? Math.round((amount / totalKrw) * 100) : 0;
+                return (
+                  <div key={cat.id} className="flex items-center justify-between text-sm">
+                    <span>{cat.label}</span>
+                    <span className="font-medium">
+                      {amount.toLocaleString()}원
+                      <span className="ml-1 text-xs text-slate-400">({pct}%)</span>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </Card>
+        </>
       ) : (
         <>
           {selectedTrip ? (
-            <Card className="border-rose-100 bg-rose-50/40 text-sm text-slate-700">
-              <span className="font-medium text-rose-700">{selectedTrip.title}</span>
+            <Card className="border-brand/20 bg-[var(--primary-light)] text-sm text-slate-700">
+              <span className="font-medium text-brand">{selectedTrip.title}</span>
               {" "}일정에 연결된 예산입니다. 항목별 금액은 직접 수정할 수 있습니다.
             </Card>
           ) : null}
@@ -201,7 +273,7 @@ export function BudgetPanel() {
                 ) : null}
               </span>
             </div>
-            <p className="text-2xl font-bold text-rose-600">{remaining.toLocaleString()}원 남음</p>
+            <p className="text-2xl font-bold text-brand">{remaining.toLocaleString()}원 남음</p>
             <p className="text-xs text-slate-500">지출 {spent.toLocaleString()}원 / 총 {totalKrw.toLocaleString()}원</p>
             <div className="mt-3 space-y-3">
               {BUDGET_CATEGORIES.map((cat) => {

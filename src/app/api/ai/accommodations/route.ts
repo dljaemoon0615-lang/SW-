@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { applyStayFilters } from "@/features/stays/lib/apply-stay-filters";
 import { searchStays } from "@/features/stays/server";
 import {
-  ensureCatalogWarm,
+  ensureStaysWarm,
   getStaysForRegion,
 } from "@/server/preload/catalog";
 import type { JapanRegionId } from "@/shared/lib/constants";
@@ -59,7 +59,7 @@ export async function GET(request: Request) {
     (!req.checkIn && !req.checkOut && searchParams.get("live") !== "1");
 
   if (usePreload) {
-    await ensureCatalogWarm();
+    await ensureStaysWarm(region);
     const cached = getStaysForRegion(region);
     if (cached?.items.length) {
       const pool = cached.items;
